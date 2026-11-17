@@ -291,27 +291,50 @@ body.noscroll{overflow:hidden}
 .hurt-btn{color:var(--hurt)}
 #detail .timer{z-index:36}
 
-/* Opening splash: title slam from the trailer, then slides up to reveal the app */
+/* Opening splash. First open: full trailer with sound. Every open after: 1.5s title slam. Then slides up. */
 #splash{position:fixed;inset:0;z-index:100;background:#0d1013;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:transform .38s cubic-bezier(.7,0,.3,1)}
 #splash .sp-bg{position:absolute;inset:-40px;background:url(img/splash/end.jpg) center/cover;filter:blur(28px) brightness(.55)}
-#splash .sp-box{position:relative;width:min(100vw,100vh);aspect-ratio:1;background:url(img/splash/end.jpg) center/cover}
-#splash video{width:100%;height:100%;display:block;object-fit:cover}
+#splash .sp-box{position:relative;width:100%;height:100%;background:url(img/splash/end.jpg) center/contain no-repeat}
+#splash.first .sp-box{background-image:url(img/splash/first.jpg)}
+#splash video{width:100%;height:100%;display:block;object-fit:contain}
 #splash.gone{transform:translateY(-100%)}
+#splash .sp-tap{position:absolute;left:50%;bottom:calc(14% + env(safe-area-inset-bottom));transform:translateX(-50%);font:800 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#181c20;background:#ffc53d;border:0;border-radius:999px;padding:16px 34px;box-shadow:0 6px 24px rgba(0,0,0,.45);animation:sp-pulse 1.1s ease-in-out infinite}
+#splash .sp-skip{position:absolute;right:16px;top:calc(14px + env(safe-area-inset-top));font:600 15px 'Barlow',sans-serif;color:#fff;background:rgba(0,0,0,.45);border:0;border-radius:999px;padding:8px 14px}
+@keyframes sp-pulse{50%{transform:translateX(-50%) scale(1.06)}}
 
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<div id="splash" aria-hidden="true"><div class="sp-bg"></div><div class="sp-box"><video src="img/splash/intro.mp4" muted playsinline autoplay preload="auto"></video></div></div>
+<div id="splash"><div class="sp-bg"></div><div class="sp-box"></div></div>
 <script>
 (function(){
-  var sp=document.getElementById('splash'), v=sp.querySelector('video'), done=false;
-  function hide(){ if(done) return; done=true; sp.classList.add('gone'); setTimeout(function(){ sp.remove(); }, 450); }
-  v.addEventListener('ended', hide);
-  v.addEventListener('error', function(){ v.style.display='none'; setTimeout(hide, 900); });
-  var p=v.play&&v.play(); if(p&&p.catch) p.catch(function(){ v.style.display='none'; setTimeout(hide, 900); });
-  sp.addEventListener('click', hide);
-  setTimeout(hide, 2000); // never hold the app longer than 2s
+  var sp=document.getElementById('splash'), box=sp.querySelector('.sp-box'), done=false, FLAG='gfj.introSeen';
+  var first=false; try{ first=!localStorage.getItem(FLAG); }catch(e){}
+  function hide(){ if(done) return; done=true; try{ localStorage.setItem(FLAG,'1'); }catch(e){}
+    var v=sp.querySelector('video'); if(v) v.pause();
+    sp.classList.add('gone'); setTimeout(function(){ sp.remove(); }, 450); }
+  var v=document.createElement('video'); v.setAttribute('playsinline',''); v.playsInline=true; v.preload='auto';
+  box.appendChild(v); v.addEventListener('ended', hide);
+  if(first){
+    // First time on this phone: the whole trailer, with sound. Phones block sound until a tap,
+    // so if autoplay with sound is refused, show a Tap to start button.
+    sp.classList.add('first'); v.src='img/splash/trailer.mp4'; v.muted=false;
+    var skip=document.createElement('button'); skip.className='sp-skip'; skip.textContent='Skip'; skip.onclick=hide; sp.appendChild(skip);
+    var p=v.play();
+    if(p&&p.catch) p.catch(function(){
+      var tap=document.createElement('button'); tap.className='sp-tap'; tap.textContent='TAP TO START';
+      tap.onclick=function(){ tap.remove(); v.muted=false; v.play().catch(function(){ v.muted=true; v.play().catch(hide); }); };
+      sp.appendChild(tap);
+    });
+    v.addEventListener('error', hide);
+  } else {
+    // Every open after: the 1.5s title slam, silent, then slide away. Tap to skip; never longer than 2.2s.
+    v.muted=true; v.autoplay=true; v.src='img/splash/open.mp4';
+    var q=v.play(); if(q&&q.catch) q.catch(function(){ v.style.display='none'; setTimeout(hide, 900); });
+    v.addEventListener('error', function(){ v.style.display='none'; setTimeout(hide, 900); });
+    sp.addEventListener('click', hide); setTimeout(hide, 2200);
+  }
 })();
 </script>
 <main id="app" class="screen"></main>
