@@ -1,6 +1,6 @@
 // Spotter offline cache. Bump VERSION when files change so phones pick up the update.
-const VERSION = 'gfj-v1.1';
-const FILES = ['./', 'index.html', 'js/data.js', 'js/engine.js', 'js/app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'gfj-v1.2';
+const FILES = ['./', 'index.html', 'js/data.js', 'js/exinfo.js', 'js/engine.js', 'js/app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
 });

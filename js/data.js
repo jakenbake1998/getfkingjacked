@@ -230,3 +230,107 @@ window.SEED_PAIN = [
   { at: '2026-11-15T12:00:00-08:00', joint: 'elbow', ex: 'dip', severity: 'hurts', note: 'Elbow pain after push day. Dips or skullcrushers, maybe tennis elbow.' },
   { at: '2026-11-15T12:00:00-08:00', joint: 'knee', ex: null, severity: 'hurts', note: 'Knees are weak. Squats bother them.' },
 ];
+
+// ---------- Home and extra exercises (dumbbells + bodyweight) ----------
+window.EXERCISES.push(
+  { id: 'glute_bridge', name: 'Glute bridge', group: 'Glutes', eq: [], kind: 'mid', unit: 'bw', start: 15, stress: {}, fitbod: ['Glute Bridge'] },
+  { id: 'sl_glute_bridge', name: 'Single-leg glute bridge', group: 'Glutes', eq: [], kind: 'mid', unit: 'bw', start: 10, stress: {}, fitbod: ['Single Leg Glute Bridge'] },
+  { id: 'db_hip_thrust', name: 'Dumbbell hip thrust', group: 'Glutes', eq: ['dumbbell'], kind: 'mid', unit: 'lb', start: 12, stress: {}, fitbod: ['Dumbbell Hip Thrust'] },
+  { id: 'donkey_kick', name: 'Donkey kick', group: 'Glutes', eq: [], kind: 'iso', unit: 'bw', start: 15, stress: {}, fitbod: ['Donkey Kick', 'Glute Kickback'] },
+  { id: 'fire_hydrant', name: 'Fire hydrant', group: 'Glutes', eq: [], kind: 'iso', unit: 'bw', start: 15, stress: {}, fitbod: ['Fire Hydrant'] },
+  { id: 'clamshell', name: 'Clamshell', group: 'Glutes', eq: [], kind: 'iso', unit: 'bw', start: 20, stress: {}, fitbod: ['Clamshell'] },
+  { id: 'bw_squat', name: 'Bodyweight squat', group: 'Quads', eq: [], kind: 'mid', unit: 'bw', start: 15, stress: { knee: 1 }, fitbod: ['Bodyweight Squat', 'Air Squat'] },
+  { id: 'db_sumo_squat', name: 'Dumbbell sumo squat', group: 'Quads', eq: ['dumbbell'], kind: 'mid', unit: 'lb', start: 12, stress: { knee: 1 }, fitbod: ['Dumbbell Sumo Squat', 'Plie Dumbbell Squat'] },
+  { id: 'db_goblet_squat', name: 'Dumbbell goblet squat', group: 'Quads', eq: ['dumbbell'], kind: 'mid', unit: 'lb', start: 12, stress: { knee: 2 }, fitbod: ['Dumbbell Goblet Squat'] },
+  { id: 'curtsy_lunge', name: 'Curtsy lunge', group: 'Glutes', eq: [], kind: 'mid', unit: 'bw', start: 10, stress: { knee: 2 }, fitbod: ['Curtsy Lunge'] },
+  { id: 'standing_db_press', name: 'Standing dumbbell press', group: 'Shoulders', eq: ['dumbbell'], kind: 'mid', unit: 'lb', start: 12, stress: { shoulder: 1, elbow: 1 }, fitbod: ['Standing Dumbbell Press'] },
+  { id: 'db_front_raise', name: 'Dumbbell front raise', group: 'Shoulders', eq: ['dumbbell'], kind: 'iso', unit: 'lb', start: 5, stress: {}, fitbod: ['Dumbbell Front Raise'] },
+  { id: 'db_kickback', name: 'Dumbbell triceps kickback', group: 'Triceps', eq: ['dumbbell'], kind: 'iso', unit: 'lb', start: 5, stress: { elbow: 1 }, fitbod: ['Dumbbell Tricep Kickback', 'Tricep Dumbbell Kickback'] },
+  { id: 'db_oh_ext', name: 'Overhead dumbbell extension', group: 'Triceps', eq: ['dumbbell'], kind: 'iso', unit: 'lb', start: 12, stress: { elbow: 2 }, fitbod: ['Dumbbell Overhead Tricep Extension'] },
+  { id: 'floor_fly', name: 'Floor dumbbell fly', group: 'Chest', eq: ['dumbbell'], kind: 'iso', unit: 'lb', start: 12, stress: { shoulder: 1 }, fitbod: ['Floor Fly'] },
+  { id: 'knee_pushup', name: 'Knee push-up', group: 'Chest', eq: [], kind: 'mid', unit: 'bw', start: 10, stress: { wrist: 1 }, fitbod: ['Knee Push Up'] },
+  { id: 'incline_pushup', name: 'Incline push-up', group: 'Chest', eq: [], kind: 'mid', unit: 'bw', start: 10, stress: { wrist: 1 }, fitbod: ['Incline Push Up'] },
+  { id: 'pike_pushup', name: 'Pike push-up', group: 'Shoulders', eq: [], kind: 'mid', unit: 'bw', start: 8, stress: { shoulder: 1, wrist: 1 }, fitbod: ['Pike Push Up'] },
+  { id: 'superman', name: 'Superman', group: 'Back', eq: [], kind: 'core', unit: 'bw', start: 12, stress: {}, fitbod: ['Superman'] },
+  { id: 'mountain_climber', name: 'Mountain climber', group: 'Core', eq: [], kind: 'core', unit: 'sec', start: 30, stress: { wrist: 1 }, fitbod: ['Mountain Climber'] },
+  { id: 'leg_raise', name: 'Lying leg raise', group: 'Core', eq: [], kind: 'core', unit: 'bw', start: 12, stress: { lowback: 1 }, fitbod: ['Lying Leg Raise', 'Leg Raise'] },
+  { id: 'side_plank', name: 'Side plank', group: 'Core', eq: [], kind: 'core', unit: 'sec', start: 30, stress: { shoulder: 1 }, fitbod: ['Side Plank'] },
+  { id: 'flutter_kick', name: 'Flutter kicks', group: 'Core', eq: [], kind: 'core', unit: 'sec', start: 30, stress: {}, fitbod: ['Flutter Kicks'] },
+  { id: 'star_jump', name: 'Star jump', group: 'Cardio', eq: [], kind: 'core', unit: 'sec', start: 30, stress: { knee: 2 }, fitbod: ['Jumping Jacks', 'Star Jump'] },
+  { id: 'db_thruster', name: 'Dumbbell thruster', group: 'Quads', eq: ['dumbbell'], kind: 'mid', unit: 'lb', start: 12, stress: { knee: 1, shoulder: 1 }, fitbod: ['Dumbbell Thruster'] }
+);
+
+// More day templates. Equipment and joint rules filter these, so they work at the gym or at home.
+Object.assign(window.DAYS, {
+  upper: { name: 'Upper body', slots: [
+    { label: 'Press', ex: ['db_bench', 'db_floor_press', 'pushup', 'knee_pushup', 'incline_pushup'] },
+    { label: 'Row', ex: ['db_row', 'seated_cable_row', 'db_bo_row'] },
+    { label: 'Shoulders', ex: ['landmine_press', 'standing_db_press', 'db_shoulder_press', 'pike_pushup'] },
+    { label: 'Vertical pull', ex: ['neutral_pullup', 'kneel_pulldown', 'superman'] },
+    { label: 'Side delts', ex: ['db_lateral', 'cable_lateral'] },
+    { label: 'Biceps', ex: ['hammer_curl', 'db_curl'] },
+    { label: 'Triceps', ex: ['rope_pushdown', 'db_kickback', 'db_oh_ext'] },
+    { label: 'Core', core: true, ex: ['dead_bug', 'plank', 'pallof', 'side_plank'] },
+  ] },
+  lower: { name: 'Lower body', slots: [
+    { label: 'Hinge', ex: ['bb_rdl', 'db_rdl', 'kb_deadlift'] },
+    { label: 'Glutes', ex: ['hip_thrust', 'db_hip_thrust', 'glute_bridge'] },
+    { label: 'Squat', ex: ['box_goblet_squat', 'db_sumo_squat', 'bw_squat', 'goblet_squat', 'db_goblet_squat'] },
+    { label: 'Lunge', ex: ['reverse_lunge', 'step_up', 'split_squat', 'curtsy_lunge'] },
+    { label: 'Hamstrings', ex: ['sl_rdl', 'cable_leg_curl', 'sl_glute_bridge'] },
+    { label: 'Calves', ex: ['db_calf_raise', 'sl_calf_raise'] },
+    { label: 'Core', core: true, ex: ['leg_raise', 'ab_wheel', 'plank', 'dead_bug'] },
+  ] },
+  full: { name: 'Full body', slots: [
+    { label: 'Squat', ex: ['box_goblet_squat', 'db_sumo_squat', 'bw_squat', 'goblet_squat'] },
+    { label: 'Press', ex: ['db_bench', 'db_floor_press', 'pushup', 'knee_pushup'] },
+    { label: 'Hinge', ex: ['db_rdl', 'bb_rdl'] },
+    { label: 'Row', ex: ['db_row', 'db_bo_row', 'seated_cable_row'] },
+    { label: 'Glutes', ex: ['hip_thrust', 'db_hip_thrust', 'glute_bridge'] },
+    { label: 'Shoulders', ex: ['db_lateral', 'standing_db_press'] },
+    { label: 'Core', core: true, ex: ['plank', 'dead_bug', 'bicycle_crunch'] },
+  ] },
+  glutes: { name: 'Glutes & legs', slots: [
+    { label: 'Glutes', ex: ['db_hip_thrust', 'hip_thrust', 'glute_bridge'] },
+    { label: 'Hinge', ex: ['db_rdl', 'sl_rdl'] },
+    { label: 'Squat', ex: ['db_sumo_squat', 'bw_squat', 'db_goblet_squat', 'box_goblet_squat'] },
+    { label: 'Lunge', ex: ['reverse_lunge', 'curtsy_lunge', 'split_squat', 'step_up'] },
+    { label: 'Single leg glutes', ex: ['sl_glute_bridge', 'sl_rdl'] },
+    { label: 'Glute burnout', ex: ['donkey_kick', 'fire_hydrant', 'clamshell'] },
+    { label: 'Calves', ex: ['db_calf_raise', 'sl_calf_raise'] },
+    { label: 'Core', core: true, ex: ['leg_raise', 'flutter_kick', 'plank', 'dead_bug'] },
+  ] },
+  upper_core: { name: 'Upper body & core', slots: [
+    { label: 'Press', ex: ['knee_pushup', 'incline_pushup', 'pushup', 'db_floor_press'] },
+    { label: 'Row', ex: ['db_bo_row', 'db_row'] },
+    { label: 'Shoulders', ex: ['standing_db_press', 'pike_pushup'] },
+    { label: 'Side delts', ex: ['db_lateral', 'db_front_raise'] },
+    { label: 'Back delts', ex: ['rear_delt_fly', 'superman'] },
+    { label: 'Arms', ex: ['db_curl', 'hammer_curl'] },
+    { label: 'Triceps', ex: ['db_kickback', 'db_oh_ext'] },
+    { label: 'Core', core: true, ex: ['dead_bug', 'side_plank', 'bicycle_crunch', 'russian_twist'] },
+  ] },
+  circuit: { name: 'Full-body circuit', circuit: true, slots: [
+    { label: 'Squat press', ex: ['db_thruster', 'bw_squat'] },
+    { label: 'Cardio', ex: ['mountain_climber', 'star_jump'] },
+    { label: 'Lunge', ex: ['reverse_lunge', 'curtsy_lunge'] },
+    { label: 'Push', ex: ['knee_pushup', 'pushup', 'incline_pushup'] },
+    { label: 'Row', ex: ['db_bo_row'] },
+    { label: 'Glutes', ex: ['glute_bridge', 'db_hip_thrust'] },
+    { label: 'Core', core: true, ex: ['flutter_kick', 'plank', 'bicycle_crunch'] },
+  ] },
+});
+
+// Workout splits to pick in setup. order = the rotation.
+window.SPLITS = {
+  ppl: { name: 'Chest & triceps, back & biceps, legs', order: ['push', 'pull', 'legs'] },
+  ul: { name: 'Upper body, lower body', order: ['upper', 'lower'] },
+  full: { name: 'Full body every time', order: ['full'] },
+  glute: { name: 'Glutes & legs focus', order: ['glutes', 'upper_core', 'glutes', 'circuit'] },
+};
+
+// Goals change reps and rest. tone = more reps, short rests.
+window.GOALS = {
+  strength: { name: 'Get stronger', reps: null, restScale: 1 },
+  tone: { name: 'Tone and lose weight', reps: { big: 12, mid: 12, iso: 15, core: 20 }, restScale: 0.4, repCap: 20 },
+};

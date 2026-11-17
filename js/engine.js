@@ -5,18 +5,24 @@
   EXERCISES.forEach((e) => (EX[e.id] = e));
 
   // ---------- state ----------
-  function freshState() {
+  // Jake's setup (gym, his joints, his Fitbod history). Anyone else starts clean.
+  function jakeState() {
     const eq = {};
     EQUIPMENT.forEach((e) => (eq[e.id] = true));
     return {
       version: 1,
-      settings: { minutes: 60, equipment: eq, order: ['push', 'pull', 'legs'] },
+      profile: { name: 'Jake', place: 'gym', split: 'ppl', goal: 'strength', stepGoal: 0 },
+      settings: { minutes: 60, equipment: eq, dumbbells: null },
       programStart: '2026-11-16',
       joints: Object.assign({}, SEED_JOINTS),
       bans: JSON.parse(JSON.stringify(SEED_BANS)),
       swaps: {},
       painLog: SEED_PAIN.slice(),
       custom: {},
+      notes: {},
+      rest: {},
+      steps: {},
+      rotIdx: null,
       history: SEED_HISTORY.map((h, i) => ({
         id: 'seed' + i,
         date: h.date,
@@ -29,20 +35,55 @@
       timer: null,
     };
   }
+  // opts: { name, place: 'gym'|'home', split, goal, minutes, dumbbells: [5,12], joints: {knee:'sore'}, stepGoal }
+  function newState(o) {
+    const eq = {};
+    EQUIPMENT.forEach((e) => (eq[e.id] = o.place === 'gym' ? true : e.id === 'dumbbell'));
+    const joints = {};
+    JOINTS.forEach((j) => (joints[j.id] = (o.joints && o.joints[j.id]) || 'ok'));
+    const today = new Date();
+    const iso = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    return {
+      version: 1,
+      profile: { name: o.name || '', place: o.place, split: o.split, goal: o.goal, stepGoal: o.stepGoal || 0 },
+      settings: { minutes: o.minutes || 45, equipment: eq, dumbbells: o.place === 'home' && o.dumbbells && o.dumbbells.length ? o.dumbbells.slice().sort((a, b) => a - b) : null },
+      programStart: iso,
+      joints, bans: {}, swaps: {}, painLog: [], custom: {}, notes: {}, rest: {}, steps: {}, rotIdx: 0,
+      history: [], current: null, timer: null,
+    };
+  }
 
+  function migrate(s) {
+    // Saved before profiles existed: that's Jake's phone.
+    if (!s.profile) s.profile = { name: 'Jake', place: 'gym', split: 'ppl', goal: 'strength', stepGoal: 0 };
+    s.settings.dumbbells = s.settings.dumbbells || null;
+    s.notes = s.notes || {};
+    s.rest = s.rest || {};
+    s.steps = s.steps || {};
+    if (s.rotIdx === undefined) s.rotIdx = null;
+    delete s.settings.order;
+    return s;
+  }
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        if (s && s.version === 1) return s;
+        if (s && s.version === 1) return migrate(s);
       }
     } catch (e) {}
-    return freshState();
+    return null; // first run: the app shows setup
   }
   let S = load();
   function save() {
-    localStorage.setItem(KEY, JSON.stringify(S));
+    if (S) localStorage.setItem(KEY, JSON.stringify(S));
+  }
+  function setup(o) {
+    S = o === 'jake' ? jakeState() : newState(o);
+    save();
+  }
+  function goal() {
+    return GOALS[(S.profile && S.profile.goal) || 'strength'];
   }
 
   // ---------- helpers ----------
@@ -63,8 +104,18 @@
     for (const k of ['barbell', 'kettlebell', 'cable', 'dumbbell']) if (ex.eq.includes(k)) return k;
     return 'dumbbell';
   }
+  function ownedDumbbells(ex) {
+    return primaryEq(ex) === 'dumbbell' && S.settings.dumbbells ? S.settings.dumbbells : null;
+  }
   function roundW(w, ex) {
     const t = primaryEq(ex);
+    const own = ownedDumbbells(ex);
+    if (own) {
+      // heaviest pair you own that isn't over the target, else the lightest
+      let best = own[0];
+      for (const k of own) if (k <= w + 0.01) best = k;
+      return best;
+    }
     if (t === 'kettlebell') {
       let best = KETTLEBELLS[0];
       for (const k of KETTLEBELLS) if (Math.abs(k - w) < Math.abs(best - w)) best = k;
@@ -82,6 +133,11 @@
   }
   function nudgeW(w, ex, dir) {
     const t = primaryEq(ex);
+    const own = ownedDumbbells(ex);
+    if (own) {
+      const i = own.indexOf(roundW(w, ex));
+      return own[Math.min(own.length - 1, Math.max(0, i + dir))];
+    }
     if (t === 'kettlebell') {
       const i = KETTLEBELLS.indexOf(roundW(w, ex));
       return KETTLEBELLS[Math.min(KETTLEBELLS.length - 1, Math.max(0, i + dir))];
@@ -94,13 +150,35 @@
   function blockInfo(date) {
     const start = dayStart(S.programStart + 'T00:00:00');
     const weeks = Math.max(0, Math.floor((dayStart(date) - start) / DAY / 7));
-    return { block: Math.floor(weeks / 4), week: weeks % 4, scheme: WEEKS[weeks % 4] };
+    return { block: Math.floor(weeks / 4), week: weeks % 4, scheme: schemeFor(weeks % 4) };
+  }
+  function schemeFor(week) {
+    const base = WEEKS[week];
+    const g = goal();
+    if (!g.reps) return base;
+    const reps = {};
+    for (const k in g.reps) reps[k] = base.name === 'Deload' ? Math.round(g.reps[k] * 0.8) : g.reps[k];
+    return Object.assign({}, base, { reps });
+  }
+  function order() {
+    return (SPLITS[S.profile.split] || SPLITS.ppl).order;
+  }
+  function rotIndex() {
+    const o = order();
+    if (S.rotIdx != null) return S.rotIdx % o.length;
+    // older saves: continue from the last workout's day
+    const last = S.history.length ? S.history[S.history.length - 1].day : null;
+    return (o.indexOf(last) + 1) % o.length;
   }
   function nextDayType() {
-    const order = S.settings.order;
-    const last = S.history.length ? S.history[S.history.length - 1].day : null;
-    const i = order.indexOf(last);
-    return order[(i + 1) % order.length];
+    return order()[rotIndex()];
+  }
+  function advanceRotation(dayDone) {
+    const o = order();
+    const i = rotIndex();
+    // if you picked a different day than planned, continue after the one you did
+    const at = o[i] === dayDone ? i : Math.max(0, o.indexOf(dayDone));
+    S.rotIdx = (at + 1) % o.length;
   }
 
   // ---------- rules ----------
@@ -156,7 +234,11 @@
       if (scheme.name === 'Deload') r = Math.max(3, Math.round(r * 0.7));
       return { w: 0, r };
     }
-    if (!hist.length) return { w: roundW(ex.start || 20, ex) * (scheme.scale < 1 ? 1 : 1), r: reps, first: true };
+    if (!hist.length) {
+      const own = ownedDumbbells(ex);
+      const w0 = own && ex.kind === 'iso' ? own[0] : roundW(ex.start || 20, ex);
+      return { w: w0, r: reps, first: true };
+    }
     const recent = hist.slice(-2);
     const best = Math.max(...recent.map((h) => bestE1rm(h.sets)));
     let w = (best / (1 + (reps + scheme.rir) / 30)) * scheme.scale;
@@ -165,23 +247,43 @@
     const lastTop = Math.max(...last.sets.map((s) => s.w));
     const topSets = last.sets.filter((s) => s.w === lastTop);
     const hitAll = topSets.every((s) => s.r >= (s.tr || reps));
-    if (scheme.scale >= 1 && hitAll && reps >= (topSets[0].tr || reps) && w <= lastTop) w = nudgeW(lastTop, ex, 1);
-    return { w, r: reps };
+    let r = reps;
+    let maxed = false;
+    const own = ownedDumbbells(ex);
+    const cap = goal().repCap || 20;
+    const lastR = Math.max(...topSets.map((s) => s.r));
+    if (scheme.scale >= 1 && hitAll && reps >= (topSets[0].tr || reps) && w <= lastTop) {
+      const up = nudgeW(lastTop, ex, 1);
+      if (own && (up === lastTop || up > lastTop * 1.5) && lastR < cap) {
+        // only a couple of dumbbells: stay at this weight and add reps until the cap
+        w = lastTop;
+        r = Math.min(cap, Math.max(reps, lastR + 2));
+      } else if (own && up === lastTop) {
+        w = lastTop;
+        r = cap;
+        maxed = true;
+      } else w = up;
+    }
+    return { w, r, maxed };
   }
 
-  function restFor(ex, scheme) {
-    return REST[ex.kind] + (ex.kind === 'big' ? scheme.restAdd : 0);
+  function restFor(ex, scheme, dayType) {
+    if (S.rest[ex.id]) return S.rest[ex.id];
+    if (dayType && DAYS[dayType] && DAYS[dayType].circuit) return 20;
+    const base = REST[ex.kind] + (ex.kind === 'big' ? scheme.restAdd : 0);
+    return Math.max(20, Math.round((base * goal().restScale) / 5) * 5);
   }
   function estSeconds(item) {
     return item.sets.length * (30 + item.rest * 0.85) + 45;
   }
 
-  function makeItem(ex, scheme, slotIdx) {
+  function makeItem(ex, scheme, slotIdx, dayType) {
     const t = target(ex, scheme);
-    const n = ex.kind === 'core' ? Math.min(3, scheme.sets) : scheme.sets;
+    const circuit = dayType && DAYS[dayType] && DAYS[dayType].circuit;
+    const n = circuit ? (S.settings.minutes >= 40 ? 4 : 3) : ex.kind === 'core' ? Math.min(3, scheme.sets) : scheme.sets;
     const sets = [];
     for (let i = 0; i < n; i++) sets.push({ w: t.w, r: t.r, tr: t.r, done: false });
-    return { slot: slotIdx, ex: ex.id, rest: restFor(ex, scheme), first: !!t.first, sets };
+    return { slot: slotIdx, ex: ex.id, rest: restFor(ex, scheme, dayType), first: !!t.first, maxed: !!t.maxed, sets };
   }
 
   function candidates(dayType, slotIdx, exclude) {
@@ -211,7 +313,7 @@
     if (coreIdx >= 0) {
       const ce = pickFor(dayType, coreIdx, block, used);
       if (ce) {
-        coreItem = makeItem(ce, scheme, coreIdx);
+        coreItem = makeItem(ce, scheme, coreIdx, dayType);
         used.push(ce.id);
       }
     }
@@ -220,7 +322,7 @@
       if (slot.core) return;
       const ex = pickFor(dayType, i, block, used);
       if (!ex) return;
-      const it = makeItem(ex, scheme, i);
+      const it = makeItem(ex, scheme, i, dayType);
       const t = estSeconds(it);
       if (items.length >= 3 && total + t + coreTime > budget + 120) return;
       items.push(it);
@@ -229,7 +331,7 @@
     });
     if (coreItem && total + coreTime <= budget + 240) { items.push(coreItem); total += coreTime; }
     // Time left over (light weeks, few slots): add a set to the main lifts, first ones first.
-    if (scheme.name !== 'Deload') {
+    if (scheme.name !== 'Deload' && !day.circuit) {
       let added = true;
       while (added && total < budget - 240) {
         added = false;
@@ -270,9 +372,9 @@
     const c = candidates(plan.day, it.slot, used);
     if (!c.length) return false;
     const ex = c[0];
-    const scheme = WEEKS[plan.week];
+    const scheme = schemeFor(plan.week);
     const done = it.sets.filter((s) => s.done).length;
-    const fresh = makeItem(ex, scheme, it.slot);
+    const fresh = makeItem(ex, scheme, it.slot, plan.day);
     plan.items[idx] = fresh;
     if (done) plan.items.splice(idx, 0, it); // keep finished sets, add new one after
     S.swaps[block + ':' + plan.day + ':' + it.slot] = ex.id;
@@ -281,12 +383,18 @@
   function swapOptions(plan, idx) {
     const it = plan.items[idx];
     const used = plan.items.map((x) => x.ex);
-    return candidates(plan.day, it.slot, used);
+    const first = it.slot >= 0 && DAYS[plan.day].slots[it.slot] ? candidates(plan.day, it.slot, used) : [];
+    const g = exInfo(it.ex).group;
+    const more = EXERCISES.filter((e) => e.group === g && allowed(e) && !used.includes(e.id) && !first.includes(e));
+    return first.concat(more);
+  }
+  function itemFor(exId, plan) {
+    return makeItem(EX[exId], schemeFor(plan.week), -1, plan.day);
   }
   function swapTo(plan, idx, exId) {
     const it = plan.items[idx];
-    const scheme = WEEKS[plan.week];
-    const fresh = makeItem(EX[exId], scheme, it.slot);
+    const scheme = schemeFor(plan.week);
+    const fresh = makeItem(EX[exId], scheme, it.slot, plan.day);
     const done = it.sets.some((s) => s.done);
     if (done) {
       it.sets = it.sets.filter((s) => s.done);
@@ -312,6 +420,7 @@
       rec = { id: 'w' + Date.now(), date: c.startedAt, day: c.day, minutes, entries };
       rec.records = recordsIn(rec);
       S.history.push(rec);
+      advanceRotation(c.day);
     }
     S.current = null;
     S.timer = null;
@@ -546,6 +655,7 @@
 
   window.Engine = {
     get S() { return S; },
+    setup, goal, schemeFor, order, itemFor, restFor, ownedDumbbells,
     save, EX, exInfo, e1rm, roundW, nudgeW, blockInfo, nextDayType, blockedBy, allowed, generate, avoidedFor,
     swapItem, swapOptions, swapTo, startWorkout, finishWorkout, reportPain, dislike, unban, volume, rangeStart,
     strengthSeries, liftSeries, setsByGroup, weekStart, liftsTrained, GROUPS, WEEKLY_TARGET, sessionsFor, bestE1rm,
