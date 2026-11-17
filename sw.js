@@ -1,6 +1,6 @@
 // Spotter offline cache. Bump VERSION when files change so phones pick up the update.
-const VERSION = 'gfj-v1.2';
-const FILES = ['./', 'index.html', 'js/data.js', 'js/exinfo.js', 'js/engine.js', 'js/app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'gfj-v1.3';
+const FILES = ['./', 'index.html', 'js/data.js', 'js/exinfo.js', 'js/engine.js', 'js/app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'img/splash/end.jpg'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
@@ -16,6 +16,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   if (url.origin !== location.origin) return;
+  if (url.pathname.endsWith('.mp4')) return; // let video stream straight from the network
   e.respondWith(
     fetch(e.request).then((r) => { const copy = r.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); return r; })
       .catch(() => caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || caches.match('index.html')))

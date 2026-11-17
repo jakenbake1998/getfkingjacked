@@ -291,10 +291,29 @@ body.noscroll{overflow:hidden}
 .hurt-btn{color:var(--hurt)}
 #detail .timer{z-index:36}
 
+/* Opening splash: title slam from the trailer, then slides up to reveal the app */
+#splash{position:fixed;inset:0;z-index:100;background:#0d1013;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:transform .38s cubic-bezier(.7,0,.3,1)}
+#splash .sp-bg{position:absolute;inset:-40px;background:url(img/splash/end.jpg) center/cover;filter:blur(28px) brightness(.55)}
+#splash .sp-box{position:relative;width:min(100vw,100vh);aspect-ratio:1;background:url(img/splash/end.jpg) center/cover}
+#splash video{width:100%;height:100%;display:block;object-fit:cover}
+#splash.gone{transform:translateY(-100%)}
+
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
+<div id="splash" aria-hidden="true"><div class="sp-bg"></div><div class="sp-box"><video src="img/splash/intro.mp4" muted playsinline autoplay preload="auto"></video></div></div>
+<script>
+(function(){
+  var sp=document.getElementById('splash'), v=sp.querySelector('video'), done=false;
+  function hide(){ if(done) return; done=true; sp.classList.add('gone'); setTimeout(function(){ sp.remove(); }, 450); }
+  v.addEventListener('ended', hide);
+  v.addEventListener('error', function(){ v.style.display='none'; setTimeout(hide, 900); });
+  var p=v.play&&v.play(); if(p&&p.catch) p.catch(function(){ v.style.display='none'; setTimeout(hide, 900); });
+  sp.addEventListener('click', hide);
+  setTimeout(hide, 2000); // never hold the app longer than 2s
+})();
+</script>
 <main id="app" class="screen"></main>
 <div id="timer"></div>
 <nav class="tabs" id="tabs"></nav>
