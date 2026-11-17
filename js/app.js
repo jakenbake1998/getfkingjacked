@@ -399,7 +399,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv" hidden>
-      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Spotter v1</div>`;
+      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v1.1</div>`;
   }
 
   // ---------------- actions ----------------
@@ -528,7 +528,7 @@
         const blob = new Blob([E.exportJSON()], { type: 'application/json' });
         const name = 'spotter-backup-' + new Date().toISOString().slice(0, 10) + '.json';
         const file = new File([blob], name, { type: 'application/json' });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file], title: 'Spotter backup' }).catch(() => {});
+        if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file], title: 'Get F*ing Jacked! backup' }).catch(() => {});
         else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); }
         break;
       }
