@@ -839,6 +839,10 @@
         <button class="pull-tab" data-act="methodinfo"><span class="pt-grab"></span><span class="pt-row"><span>How weights and reps are picked</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14l5-5 5 5"/></svg></span></button>
       </div>
 
+      <h2>Exercise figure</h2>
+      ${(() => { const st = window.Figure3D && Figure3D.style ? Figure3D.style() : 'classic'; return `<div class="seg seg2"><button class="${st === 'classic' ? 'on' : ''}" data-act="figstyle" data-k="classic">Classic</button><button class="${st === 'jake' ? 'on' : ''}" data-act="figstyle" data-k="jake">Jake</button></div>
+      <div class="sub" style="margin:-6px 4px 0">${st === 'jake' ? 'The intro guy: tank top, shorts, mustache, comic-book shading.' : 'Plain grey figure with the worked muscles lit up.'}</div>`; })()}
+
       <h2>Your equipment</h2>
       <div class="card">${EQUIPMENT.map((e) => `<div class="toggle"><span>${esc(e.name)}</span><button class="sw ${S.settings.equipment[e.id] ? 'on' : ''}" data-act="eq" data-k="${e.id}" role="switch" aria-checked="${!!S.settings.equipment[e.id]}" aria-label="${esc(e.name)}"></button></div>`).join('')}</div>
       ${S.settings.equipment.dumbbell ? (() => { const pairs = S.settings.dbMode === 'pairs' || (S.settings.dumbbells && S.settings.dumbbells.length); const max = S.settings.rackMax || 100; return `<h2>Dumbbells</h2>
@@ -863,7 +867,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv,text/plain" hidden>
-      <div class="sub ver-tap" data-act="ver" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.8</div>`;
+      <div class="sub ver-tap" data-act="ver" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.9</div>`;
   }
 
 
@@ -929,6 +933,7 @@
         if (ui.verTaps.length >= 5) { ui.verTaps = []; const on = localStorage.getItem('gfj.honest') !== '1'; if (window.Figure3D && Figure3D.setHonest) Figure3D.setHonest(on); else localStorage.setItem('gfj.honest', on ? '1' : '0'); toast(on ? 'Anatomically honest mode: on' : 'Anatomically honest mode: off'); }
         break;
       }
+      case 'figstyle': if (window.Figure3D && Figure3D.setStyle) { Figure3D.setStyle(el.dataset.k); render(); toast(el.dataset.k === 'jake' ? 'Figure: Jake' : 'Figure: Classic'); } break;
       case 'plandraft': { const k = el.dataset.k, v = el.dataset.v; ui.planDraft = ui.planDraft || {}; ui.planDraft[k] = isNaN(+v) ? v : +v; render(); break; }
       case 'planundo': ui.planDraft = null; render(); break;
       case 'plansave': {

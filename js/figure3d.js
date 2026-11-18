@@ -18,7 +18,7 @@
   const has = (id) => !!getDef(id);
   let T = null, loading = null, failed = false;
   const thumbs = {};
-  try { Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v3') || '{}')); } catch (e) {}
+  try { Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v4') || '{}')); } catch (e) {}
 
   function load() {
     if (T) return Promise.resolve(T);
@@ -48,7 +48,9 @@
   const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   const band = (x, a, b, fe) => sstep(a - fe, a + fe, x) * (1 - sstep(b - fe, b + fe, x));
 
-  function partGeom(kind, tg, widthFn) {
+  // glow colours (emissive) for target (red) and helper (orange) muscles
+  const GLOW_R = [1.0, 0.16, 0.08], GLOW_O = [1.0, 0.42, 0.08];
+  function partGeom(kind, tg, widthFn, colorFn, tintK) {
     const S = SHAPES[kind], N = 22, pts = [];
     const r = (t) => {
       const k = S.keys;
@@ -61,8 +63,9 @@
     if (S.capB) for (const a of [18, 36, 54, 72, 90]) pts.push(new T.Vector2(Math.max(0.01, r1 * Math.cos((a * Math.PI) / 180)), S.len + r1 * 0.55 * Math.sin((a * Math.PI) / 180)));
     const g = new T.LatheGeometry(pts, 40);
     const pos = g.attributes.position, nor = g.attributes.normal;
-    const col = new Float32Array(pos.count * 3);
+    const col = new Float32Array(pos.count * 3), glo = new Float32Array(pos.count * 3);
     const cBase = new T.Color(BASE), cR = new T.Color(RED), cO = new T.Color(ORANGE), c = new T.Color();
+    const tk = tintK == null ? 0.95 : tintK;
     for (let i = 0; i < pos.count; i++) {
       let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
       const t = y / S.len;
@@ -82,27 +85,34 @@
         const w = band(t, t0, t1, 0.07) * band(ang, a0, a1, 16);
         if (lvl === 1) wR = Math.max(wR, w); else wO = Math.max(wO, w);
       }
-      c.copy(cBase).lerp(cO, wO * 0.9).lerp(cR, wR * 0.95);
+      if (colorFn) cBase.setHex(colorFn(t, ang));
+      c.copy(cBase).lerp(cO, wO * 0.9 * tk).lerp(cR, wR * tk);
       col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      for (let k = 0; k < 3; k++) glo[i * 3 + k] = Math.max(wR * GLOW_R[k], wO * 0.75 * GLOW_O[k]);
     }
     g.setAttribute('color', new T.BufferAttribute(col, 3));
+    g.setAttribute('glowc', new T.BufferAttribute(glo, 3));
     return g;
   }
   // Sphere-like parts (joints, delts, pelvis, head, hands, feet), optionally tinted
-  function blobGeom(rx, ry, rz, tint, region) {
+  function blobGeom(rx, ry, rz, tint, region, colorFn, tintK) {
     const g = new T.SphereGeometry(1, 36, 26);
     g.scale(rx, ry, rz);
-    const pos = g.attributes.position, col = new Float32Array(pos.count * 3);
+    const pos = g.attributes.position, col = new Float32Array(pos.count * 3), glo = new Float32Array(pos.count * 3);
     const cBase = new T.Color(BASE), c = new T.Color();
+    const tk = tintK == null ? 1 : tintK;
     for (let i = 0; i < pos.count; i++) {
+      const nx = pos.getX(i) / rx, ny = pos.getY(i) / ry, nz = pos.getZ(i) / rz;
+      if (colorFn) cBase.setHex(colorFn(nx, ny, nz));
       c.copy(cBase);
-      if (tint) {
-        const w = region ? region(pos.getX(i) / rx, pos.getY(i) / ry, pos.getZ(i) / rz) : 1;
-        c.lerp(new T.Color(tint), w);
-      }
+      let w = 0;
+      if (tint) { w = region ? region(nx, ny, nz) : 1; c.lerp(new T.Color(tint), w * tk); }
       col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      const gc = tint === RED ? GLOW_R : tint === ORANGE ? GLOW_O : null;
+      if (gc) for (let k = 0; k < 3; k++) glo[i * 3 + k] = w * gc[k] * (tint === RED ? 1 : 0.75);
     }
     g.setAttribute('color', new T.BufferAttribute(col, 3));
+    g.setAttribute('glowc', new T.BufferAttribute(glo, 3));
     return g;
   }
 
@@ -225,6 +235,12 @@
     return { J, F, heel: p.heel || 0 };
   }
 
+  // Figure style: 'classic' grey mannequin or 'jake' (the intro character: tank, shorts, mustache, cel-shaded)
+  function figStyle() {
+    try { const v = localStorage.getItem('gfj.figstyle'); if (v) return v; } catch (e) {}
+    return window.Engine && Engine.S && Engine.S.profile && Engine.S.profile.name === 'Jake' ? 'jake' : 'classic';
+  }
+  const JAKE = { skin: 0xd59a6f, tank: 0x16a184, shorts: 0x15171b, shoe: 0xf1f1ee, hair: 0x22160f, sock: 0xe8e8e4 };
   const honestOn = () => { try { return localStorage.getItem('gfj.honest') === '1'; } catch (e) { return false; } };
   // ---------- one scene per exercise ----------
   const scenes = {};
@@ -247,16 +263,40 @@
     if (def.b && def.b.fit && s > 0.5) o.fit = def.b.fit; else if (def.a.fit) o.fit = def.a.fit;
     return o;
   }
+  // Adds the per-vertex muscle glow (attribute glowc) as emissive light on any material
+  function withGlow(m, k) {
+    m.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 glowc;\nvarying vec3 vGlow;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glowc;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vGlow;')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += vGlow * ' + k.toFixed(2) + ';');
+    };
+    return m;
+  }
+  let toonRamp = null;
+  function rampTex() {
+    if (toonRamp) return toonRamp;
+    const d = new Uint8Array([52, 128, 200, 255]);
+    toonRamp = new T.DataTexture(d, 4, 1, T.RedFormat); toonRamp.minFilter = toonRamp.magFilter = T.NearestFilter; toonRamp.needsUpdate = true;
+    return toonRamp;
+  }
+  // Ink outline: a slightly inflated back-facing copy of each part, drawn dark
+  let inkMat = null;
+  function ink() {
+    if (inkMat) return inkMat;
+    inkMat = new T.MeshBasicMaterial({ color: 0x0e0b0a, side: T.BackSide });
+    inkMat.onBeforeCompile = (sh) => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normal * 0.95;'); };
+    return inkMat;
+  }
   function build(id) {
-    if (scenes[id]) return scenes[id];
+    const style = figStyle();
+    const skey = style + '|' + id;
+    if (scenes[skey]) return scenes[skey];
     const def = getDef(id);
     const tg = targetsFor(id, def);
     const scene = new T.Scene();
-    const mat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.36, metalness: 0.08 });
-    mat.onBeforeCompile = (sh) => {
-      sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>',
-        '#include <emissivemap_fragment>\n  float warm = max(vColor.r - max(vColor.g, vColor.b), 0.0);\n  totalEmissiveRadiance += vec3(1.0, 0.18, 0.1) * warm * 0.75;');
-    };
+    const jake = style === 'jake';
+    const mat = withGlow(jake ? new T.MeshToonMaterial({ vertexColors: true, gradientMap: rampTex() }) : new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.36, metalness: 0.08 }), jake ? 0.55 : 0.75);
     const dark = new T.MeshStandardMaterial({ color: 0x2b3138, roughness: 0.55, metalness: 0.3 });
     const pad = new T.MeshStandardMaterial({ color: 0x23282e, roughness: 0.7, metalness: 0.1 });
     const steel = new T.MeshStandardMaterial({ color: 0xa3acb6, roughness: 0.28, metalness: 0.85 });
@@ -267,29 +307,50 @@
     const fill = new T.DirectionalLight(0xffe2c8, 0.6); fill.position.set(60, -40, 120); scene.add(fill);
 
     const torsoW = (t, front) => [0.66 * (front && t > 0.55 && t < 0.98 ? 1.14 : 1), 0.95 + 0.62 * sstep(0.22, 0.86, t)];
+    // colours: grey everywhere (classic), or Jake's skin/clothes
+    const C = jake ? {
+      torso: (t) => (t > 0.965 ? JAKE.skin : JAKE.tank), skin: () => JAKE.skin,
+      th: (t) => (t < 0.58 ? JAKE.shorts : JAKE.skin), shorts: () => JAKE.shorts, shoe: () => JAKE.shoe, sock: () => JAKE.sock,
+      head: (x, y) => (y > 0.3 || (x < -0.25 && y > -0.35) ? JAKE.hair : JAKE.skin),
+    } : {};
+    const TK = jake ? 0.55 : null; // on clothes/skin the red tints less; the glow does the work
     const G = {
-      torso: partGeom('torso', tg, torsoW), neck: partGeom('neck', tg), ua: partGeom('ua', tg), fa: partGeom('fa', tg), th: partGeom('th', tg), sh: partGeom('sh', tg),
-      delt: blobGeom(9, 8.6, 8.8, tint(tg.delts)), elbow: blobGeom(4.5, 4.5, 4.5), knee: blobGeom(5.4, 5.4, 5.4),
-      pelvis: blobGeom(11.5, 10, 15, tint(tg.glutes), (x, y) => sstep(0.05, -0.45, x) * sstep(0.5, -0.1, y)),
-      head: blobGeom(7.4, 9, 7.2), chin: blobGeom(4.6, 4.2, 5.4), hand: blobGeom(3.3, 4.8, 2.4), thumb: blobGeom(1.4, 2.6, 1.4), foot: blobGeom(3.2, 8.6, 4.1),
-      hipj: blobGeom(9.6, 9.6, 9.6, tint(tg.glutes), (x) => sstep(0.1, -0.5, x) * 0.9), ankle: blobGeom(3.3, 3.3, 3.3),
+      torso: partGeom('torso', tg, torsoW, C.torso, TK), neck: partGeom('neck', tg, null, C.skin, TK), ua: partGeom('ua', tg, null, C.skin, TK), fa: partGeom('fa', tg, null, C.skin, TK),
+      th: partGeom('th', tg, null, C.th, TK), sh: partGeom('sh', tg, null, C.skin, TK),
+      delt: blobGeom(9, 8.6, 8.8, tint(tg.delts), null, C.skin, TK), elbow: blobGeom(4.5, 4.5, 4.5, null, null, C.skin), knee: blobGeom(5.4, 5.4, 5.4, null, null, C.skin),
+      pelvis: blobGeom(11.5, 10, 15, tint(tg.glutes), (x, y) => sstep(0.05, -0.45, x) * sstep(0.5, -0.1, y), C.shorts, TK),
+      head: blobGeom(7.4, 9, 7.2, null, null, C.head), chin: blobGeom(4.6, 4.2, 5.4, null, null, C.skin), hand: blobGeom(3.3, 4.8, 2.4, null, null, C.skin), thumb: blobGeom(1.4, 2.6, 1.4, null, null, C.skin),
+      foot: blobGeom(3.2, 8.6, 4.1, null, null, C.shoe),
+      hipj: blobGeom(9.6, 9.6, 9.6, tint(tg.glutes), (x) => sstep(0.1, -0.5, x) * 0.9, C.shorts, TK), ankle: blobGeom(3.3, 3.3, 3.3, null, null, C.sock),
     };
     const rig = new T.Group(); scene.add(rig);
-    const M = (g, m, parent) => { const o = new T.Mesh(g, m || mat); (parent || rig).add(o); return o; };
+    const M = (g, m, parent) => { const o = new T.Mesh(g, m || mat); (parent || rig).add(o); if (jake) o.add(new T.Mesh(g, ink())); return o; };
     const P = {
       torso: M(G.torso), pelvis: M(G.pelvis), neck: M(G.neck), head: M(G.head), chin: M(G.chin),
       ua: [M(G.ua), M(G.ua)], fa: [M(G.fa), M(G.fa)], th: [M(G.th), M(G.th)], sh: [M(G.sh), M(G.sh)],
       delt: [M(G.delt), M(G.delt)], elbow: [M(G.elbow), M(G.elbow)], knee: [M(G.knee), M(G.knee)], hand: [M(G.hand), M(G.hand)], thumb: [M(G.thumb), M(G.thumb)],
       foot: [M(G.foot), M(G.foot)], hipj: [M(G.hipj), M(G.hipj)], ankle: [M(G.ankle), M(G.ankle)],
     };
+    if (jake) { // face: eyes, brows, nose, the mustache
+      const fm = new T.MeshToonMaterial({ color: JAKE.hair, gradientMap: rampTex() });
+      const nm = withGlow(new T.MeshToonMaterial({ color: JAKE.skin, gradientMap: rampTex() }), 0);
+      const sg = (r) => new T.SphereGeometry(r, 12, 10);
+      P.face = {
+        eye0: new T.Mesh(sg(1.05), fm), eye1: new T.Mesh(sg(1.05), fm),
+        brow0: new T.Mesh(new T.CapsuleGeometry(0.55, 2.4, 4, 8), fm), brow1: new T.Mesh(new T.CapsuleGeometry(0.55, 2.4, 4, 8), fm),
+        nose: new T.Mesh(sg(1.25), nm), stache: new T.Mesh(new T.CapsuleGeometry(1.05, 4.6, 4, 10), fm),
+      };
+      Object.values(P.face).forEach((m) => rig.add(m));
+    }
     // ---- hidden "honest" mode: a small dangling part on a spring (hero view only) ----
     let honest = null;
     if (honestOn()) {
-      const skin = new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
+      const skin = figStyle() === 'jake' ? new T.MeshToonMaterial({ color: JAKE.skin, gradientMap: rampTex() }) : new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
       const shaft = new T.Mesh(new T.BufferGeometry(), skin);
       const tipM = new T.Mesh(new T.SphereGeometry(2.75, 18, 14), skin);
       const b0 = new T.Mesh(new T.SphereGeometry(2.9, 16, 12), skin), b1 = new T.Mesh(new T.SphereGeometry(2.9, 16, 12), skin);
       rig.add(shaft); rig.add(tipM); rig.add(b0); rig.add(b1);
+      if (figStyle() === 'jake') [shaft, tipM, b0, b1].forEach((m) => m.add(new T.Mesh(m.geometry, ink())));
       honest = { shaft, tipM, b0, b1, pts: null, prev: null };
     }
     // ---- equipment ----
@@ -367,8 +428,8 @@
     y1 = Math.max(y1, FLOOR + 4);
     shadow.scale.set(Math.max(60, x1 - x0) * 0.9, 48, 1); shadow.position.set((x0 + x1) / 2, -FLOOR + 0.2, 0);
     const autoView = [x0, y0, x1 - x0, y1 - y0];
-    const s = { id, def, scene, P, props, honest, view: def.view || autoView, mini: def.mini || autoView };
-    scenes[id] = s;
+    const s = { id, key: skey, style, def, scene, P, props, honest, view: def.view || autoView, mini: def.mini || autoView };
+    scenes[skey] = s;
     return s;
   }
 
@@ -398,6 +459,15 @@
     blob(P.head, J.head, J.neck, J.head, F.head);
     const hdir = nrm(sub(J.head, J.neck));
     blob(P.chin, add(add(J.head, hdir, -4.2), F.head, 2.6), J.neck, J.head, F.head);
+    if (P.face) {
+      const fw = nrm(F.head), sd = nrm(cross(hdir, fw));
+      const at = (f, u, sdd) => W3(add(add(add(J.head, fw, f), hdir, u), sd, sdd));
+      P.face.eye0.position.copy(at(6.7, 1.6, 2.6)); P.face.eye1.position.copy(at(6.7, 1.6, -2.6));
+      [['brow0', 2.7], ['brow1', -2.7]].forEach(([k, z]) => { const m = P.face[k]; place(m, add(add(add(J.head, fw, 6.9), hdir, 3.4), sd, z - 1.4), add(add(add(J.head, fw, 6.9), hdir, 3.0), sd, z + 1.4)); m.position.copy(at(6.9, 3.2, z)); });
+      P.face.nose.position.copy(at(7.6, -0.4, 0));
+      place(P.face.stache, add(add(add(J.head, fw, 7.3), hdir, -2.7), sd, -2.4), add(add(add(J.head, fw, 7.3), hdir, -2.7), sd, 2.4));
+      P.face.stache.position.copy(at(7.3, -2.7, 0));
+    }
     for (let i = 0; i < 2; i++) {
       const sho = J['sho' + i], elb = J['elb' + i], hand = J['hand' + i];
       place(P.ua[i], sho, elb, F['ua' + i], -1);
@@ -464,6 +534,7 @@
       const curve = new T.CatmullRomCurve3(P2.map(W3));
       const g = new T.TubeGeometry(curve, 28, 2.4, 12, false);
       H.shaft.geometry.dispose(); H.shaft.geometry = g;
+      H.shaft.children.forEach((c) => (c.geometry = g));
       H.tipM.position.copy(W3(P2[N - 1]));
       const d0 = nrm(sub(P2[2], P2[0]));
       const side = nrm(cross(d0, F.torso));
@@ -499,8 +570,10 @@
   }
 
   function dispose(id) {
-    const sc = scenes[id];
+    const k = scenes[id] ? id : figStyle() + '|' + id;
+    const sc = scenes[k];
     if (!sc) return;
+    id = k;
     sc.scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { if (m.map) m.map.dispose(); m.dispose(); }); } });
     delete scenes[id];
   }
@@ -581,14 +654,15 @@
     if (!want.size) return;
     load().then(() => {
       let n = 0;
-      for (const id of [...want]) { thumbs[id] = snap(id, 1, 128); want.delete(id); if (!hero || hero.id !== id) dispose(id); if (++n >= 6) break; }
-      try { localStorage.setItem('gfj.figthumbs.v3', JSON.stringify(thumbs)); } catch (e) {}
+      for (const id of [...want]) { thumbs[figStyle() + '|' + id] = snap(id, 1, 128); want.delete(id); if (!hero || hero.id !== id) dispose(id); if (++n >= 6) break; }
+      try { localStorage.setItem('gfj.figthumbs.v4', JSON.stringify(thumbs)); } catch (e) {}
       window.dispatchEvent(new Event('figthumbs'));
       if (want.size) thumbJob = setTimeout(runThumbs, 60);
     }).catch(() => {});
   }
   function thumbURL(id) {
-    if (thumbs[id]) return thumbs[id];
+    const tk = figStyle() + '|' + id;
+    if (thumbs[tk]) return thumbs[tk];
     if (has(id) && !failed) { want.add(id); if (!thumbJob) thumbJob = setTimeout(runThumbs, 120); }
     return null;
   }
@@ -601,6 +675,8 @@
     warm() {},
     _solve: (id, k) => { const d = getDef(id); return d ? solve3(d, poseAt(d, k)).J : null; },
     snap: (id, k, size) => load().then(() => snap(id, k, size || 300)), // debugging / previews
+    style: figStyle,
+    setStyle(v) { try { localStorage.setItem('gfj.figstyle', v); } catch (e) {} Object.keys(scenes).forEach((k) => { const sc = scenes[k]; sc.scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); delete scenes[k]; }); if (hero) { hero.id = null; hero.el = null; } },
     setHonest(on) { try { localStorage.setItem('gfj.honest', on ? '1' : '0'); } catch (e) {} Object.keys(scenes).forEach((id) => { if (!hero || hero.id !== id) dispose(id); }); if (hero && hero.id) { const id = hero.id; dispose(id); hero.id = null; hero.el = null; } },
   };
 })();
