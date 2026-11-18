@@ -154,7 +154,7 @@
   add('sl_rdl', standing({ hold: 'db', root: 'ankle', ground: ['ankle0'], cam: BACKCAM,
     a: { t: 0, ua: [4, 2], fa: [2, 0], th: [0, 0], sh: [0, 0] },
     b: { t: 84, hd: -12, ua: [0, 0], fa: [0, 0], th: [16, -78], sh: [-6, -80] } }));
-  add('cable_leg_curl', standing({ root: 'ankle1', ground: ['ankle1'], cable: [176, 180], cableTo: 'ankle0', cam: [0.2, 0.2, 0.96],
+  add('cable_leg_curl', standing({ root: 'ankle1', ground: ['ankle1'], cable: [150, 180], cableTo: 'ankle0', cam: [0.2, 0.2, 0.96],
     a: { t: 12, ua: [62, 62], fa: [84, 84], th: [0, 0], sh: [0, 0] },
     b: { t: 12, ua: [62, 62], fa: [84, 84], th: [-6, 0], sh: [-110, 0] } }));
   const bridge = (bench, hold, oneLeg) => ({ root: 'sho', at: [60, (bench ? 140 : FL) - 13], fit: [{ j: 'sho', y: bench ? 140 : FL }, { j: oneLeg ? 'ankle1' : 'ankle0', y: FL }],
@@ -173,7 +173,7 @@
   add('kb_swing', standing({ hold: 'kbmid', handsZ: 4,
     a: { t: 66, hd: -14, ua: [-28, -28], fa: [-24, -24], th: [28, 28], sh: [-14, -14], labd: [12, 12] },
     b: { t: -4, ua: [92, 92], fa: [92, 92], th: [0, 0], sh: [0, 0], labd: [12, 12] } }));
-  add('cable_kickback_glute', standing({ root: 'ankle1', ground: ['ankle1'], cable: [180, 182], cableTo: 'ankle0', cam: [0.2, 0.2, 0.96],
+  add('cable_kickback_glute', standing({ root: 'ankle1', ground: ['ankle1'], cable: [152, 182], cableTo: 'ankle0', cam: [0.2, 0.2, 0.96],
     a: { t: 16, ua: [66, 66], fa: [86, 86], th: [6, 0], sh: [0, 0] },
     b: { t: 20, ua: [66, 66], fa: [86, 86], th: [-42, 0], sh: [-36, 0] } }));
   add('cable_abduction', standing({ root: 'ankle1', ground: ['ankle1'], cable: [100, 182, -46], cableTo: 'ankle0', cam: FRONTCAM,
@@ -235,11 +235,11 @@
     a: { t: 86, hd: 4, ua: [0, 0], fa: [90, 90], th: [-86, -86], sh: [-86, -86] },
     b: { t: 84, hd: 4, ua: [2, 2], fa: [90, 90], th: [-86, -86], sh: [-86, -86] } });
   add('side_plank', Object.assign({}, D.plank, { roll: -90, fit: null, ground: ['elb0', 'ankle0'], cam: [0.4, 0.22, 0.89], target: { obliques: 1, abdominals: 2, glutes: 2 },
-    a: { t: 86, hd: 0, ua: [0, 0], fa: [90, 90], th: [-86, -86], sh: [-86, -86] }, b: { t: 80, hd: 0, ua: [0, 0], fa: [90, 90], th: [-80, -80], sh: [-80, -80] } }));
+    a: { t: 86, hd: 0, ua: [0, -92], fa: [90, -92], th: [-86, -86], sh: [-86, -86] }, b: { t: 80, hd: 0, ua: [0, -92], fa: [90, -92], th: [-80, -80], sh: [-80, -80] } }));
   const supine = (a, b, over) => Object.assign({ root: 'hip', at: [100, FL - 12], mat: [20, 190], cam: HIGHCAM, a: Object.assign({ t: -90 }, a), b: Object.assign({ t: -90 }, b) }, over);
   add('dead_bug', supine({ ua: [180, 180], fa: [180, 180], th: [180, 180], sh: [90, 90] }, { ua: [262, 180], fa: [262, 180], th: [180, 104], sh: [90, 100] }, { target: { abdominals: 1, obliques: 2 } }));
-  add('crunch', supine({ ua: [-150, -150], abd: [60, 60], fa: [40, 40], th: [136, 132], sh: [22, 18] }, { t: -58, ua: [-150, -150], abd: [60, 60], fa: [40, 40], th: [136, 132], sh: [22, 18] }, { target: { abdominals: 1 } }));
-  add('bicycle_crunch', supine({ t: -66, tw: -26, ua: [-150, -150], abd: [62, 62], fa: [40, 40], th: [160, 100], sh: [86, 96] }, { t: -66, tw: 26, ua: [-150, -150], abd: [62, 62], fa: [40, 40], th: [100, 160], sh: [96, 86] }, { target: { abdominals: 1, obliques: 1 } }));
+  add('crunch', supine({ ua: [111, 111], abd: [-14, -14], fa: [-104, -104], fabd: [-51, -51], th: [136, 132], sh: [22, 18] }, { t: -58, hd: -8, ua: [111, 111], abd: [-14, -14], fa: [-104, -104], fabd: [-51, -51], th: [136, 132], sh: [22, 18] }, { target: { abdominals: 1 }, armsRef: -90 }));
+  add('bicycle_crunch', supine({ t: -66, tw: -26, ua: [-99, -99], abd: [19, 19], fa: [54, 54], fabd: [-68, -68], th: [160, 100], sh: [86, 96] }, { t: -66, tw: 26, ua: [-99, -99], abd: [19, 19], fa: [54, 54], fabd: [-68, -68], th: [100, 160], sh: [96, 86] }, { target: { abdominals: 1, obliques: 1 }, armsRef: -90 }));
   add('leg_raise', supine({ ua: [88, 88], abd: [12, 12], fa: [90, 90], th: [94, 94], sh: [92, 92] }, { ua: [88, 88], abd: [12, 12], fa: [90, 90], th: [176, 176], sh: [176, 176] }, { target: { abdominals: 1 } }));
   add('flutter_kick', supine({ ua: [88, 88], abd: [12, 12], fa: [90, 90], th: [112, 92], sh: [112, 92] }, { ua: [88, 88], abd: [12, 12], fa: [90, 90], th: [92, 112], sh: [92, 112] }, { target: { abdominals: 1 }, period: 1400 }));
   add('russian_twist', { root: 'hip', at: [100, FL - 12], ground: ['hip'], mat: [20, 190], hold: 'goblet', handsZ: 4, cam: FRONTCAM, target: { obliques: 1, abdominals: 1 },
@@ -299,5 +299,5 @@
   add('fb_legpullin', { root: 'hip', at: [100, FL - 12], ground: ['hip', 'mid'], mat: [20, 190], cam: [0.5, 0.25, 0.83], target: { abdominals: 1 },
     a: { t: -50, ua: [-40, -40], fa: [-10, -10], th: [100, 100], sh: [96, 96] },
     b: { t: -40, ua: [-40, -40], fa: [-10, -10], th: [150, 150], sh: [60, 60] } });
-  add('fb_situp', supine({ ua: [140, 140], fa: [-120, -120], th: [136, 132], sh: [22, 18] }, { t: -12, hd: -10, ua: [140, 140], fa: [-120, -120], th: [136, 132], sh: [22, 18] }, { target: { abdominals: 1 } }));
+  add('fb_situp', supine({ ua: [111, 111], abd: [-14, -14], fa: [-104, -104], fabd: [-51, -51], th: [136, 132], sh: [22, 18] }, { t: -12, hd: -10, ua: [111, 111], abd: [-14, -14], fa: [-104, -104], fabd: [-51, -51], th: [136, 132], sh: [22, 18] }, { target: { abdominals: 1 }, armsRef: -90 }));
 })();

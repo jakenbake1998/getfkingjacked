@@ -154,7 +154,10 @@
     J.neck = add(J.sho, H, L.neck);
     J.head = add(J.neck, H, L.head);
     F.torso = TF; F.head = v3(Math.cos(R(t + hd)), Math.sin(R(t + hd)), 0);
-    const ua = arr(p.ua, 4), fa = arr(p.fa, 2), abd = arr(p.abd, 0), fabd = p.fabd != null ? arr(p.fabd, 0) : abd;
+    let ua = arr(p.ua, 4), fa = arr(p.fa, 2);
+    const abd = arr(p.abd, 0), fabd = p.fabd != null ? arr(p.fabd, 0) : abd;
+    // armsRef: arm angles were written for this torso angle; when the torso curls, the arms ride along with it
+    if (def.armsRef != null) { const d = t - def.armsRef; ua = ua.map((x) => x - d); fa = fa.map((x) => x - d); }
     const th = arr(p.th, 0), sh = arr(p.sh, 0), labd = arr(p.labd, 0), slabd = p.slabd != null ? arr(p.slabd, 0) : labd;
     // a limb direction from a sagittal angle (0 down, 90 forward, 180 up) tipped out to the side by `ab`
     const limb = (a, ab, side, twist) => {
