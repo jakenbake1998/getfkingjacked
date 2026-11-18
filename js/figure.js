@@ -22,6 +22,7 @@
   const BENCH = (x0, x1, top) => `<g class="fg-prop"><rect x="${x0}" y="${top}" width="${x1 - x0}" height="7" rx="3"/><rect x="${x0 + 8}" y="${top + 7}" width="5" height="${186 - top - 7}"/><rect x="${x1 - 13}" y="${top + 7}" width="5" height="${186 - top - 7}"/></g>`;
   const EX = {
     db_bench: {
+      bench: { x0: 30, x1: 120, top: 140 },
       cam: [0.25, 0.55, 0.8],
       handsZ: 23,
       view: [22, 44, 150, 145], mini: [20, 50, 140, 140], root: 'hip', hold: 'db',
