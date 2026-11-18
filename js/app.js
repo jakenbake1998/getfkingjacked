@@ -863,7 +863,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv,text/plain" hidden>
-      <div class="sub ver-tap" data-act="ver" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.4</div>`;
+      <div class="sub ver-tap" data-act="ver" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.5</div>`;
   }
 
 

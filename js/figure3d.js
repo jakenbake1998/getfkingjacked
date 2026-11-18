@@ -273,8 +273,8 @@
     let honest = null;
     if (honestOn()) {
       const skin = new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
-      const shaft = new T.Mesh(new T.CapsuleGeometry(1.9, 6.2, 6, 14).translate(0, 4.6, 0), skin);
-      const b0 = new T.Mesh(new T.SphereGeometry(2.3, 16, 12), skin), b1 = new T.Mesh(new T.SphereGeometry(2.3, 16, 12), skin);
+      const shaft = new T.Mesh(new T.CapsuleGeometry(2.4, 18.2, 8, 16).translate(0, 11.5, 0), skin);
+      const b0 = new T.Mesh(new T.SphereGeometry(2.9, 16, 12), skin), b1 = new T.Mesh(new T.SphereGeometry(2.9, 16, 12), skin);
       rig.add(shaft); rig.add(b0); rig.add(b1);
       honest = { shaft, b0, b1, tip: null, v: { x: 0, y: 0, z: 0 } };
     }
@@ -414,7 +414,7 @@
       if (props.rope) props.rope[i].position.copy(W3(add(hand, v3(0, 6, i ? -1.5 : 1.5))));
     }
     if (s.honest) {
-      const H = s.honest, L2 = 10.5, dt = 1 / 60;
+      const H = s.honest, L2 = 23, dt = 1 / 60; // ~9 in at this scale (1 unit ≈ 1 cm)
       const A = add(add(add(J.hip, F.torso, 9.5), tdir, -7.5), v3(0, 0, 0));
       if (!H.tip || s.still) { H.tip = add(A, nrm(add(v3(0, 1, 0), F.torso, 0.25)), L2); H.v = v3(0, 0, 0); }
       else {
@@ -429,8 +429,8 @@
       }
       place(H.shaft, A, H.tip, F.torso, 1);
       const side = nrm(cross(nrm(sub(H.tip, A)), F.torso));
-      const hang = add(A, nrm(add(sub(H.tip, A), v3(0, 6, 0))), 2.6);
-      H.b0.position.copy(W3(add(hang, side, 1.9))); H.b1.position.copy(W3(add(hang, side, -1.9)));
+      const hang = add(A, nrm(add(sub(H.tip, A), v3(0, 14, 0))), 3.2);
+      H.b0.position.copy(W3(add(hang, side, 2.4))); H.b1.position.copy(W3(add(hang, side, -2.4)));
     }
     if (props.mid) props.mid.position.copy(W3(add(J.mid, nrm(sub(J.hand0, J.elb0)), def.hold === 'wheel' ? 6 : def.hold === 'kbmid' ? 1 : 2.5)));
     if (props.back) props.back.position.copy(W3(add(add(J.sho, nrm(sub(J.sho, J.hip)), 2), F.torso, -9)));
