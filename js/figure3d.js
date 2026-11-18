@@ -230,7 +230,17 @@
   function poseAt(def, s) {
     const o = {};
     const keys = new Set(Object.keys(def.a).concat(Object.keys(def.b || {})));
-    keys.forEach((k) => { if (k === 'fit') return; const a = def.a[k], b = def.b && def.b[k] != null ? def.b[k] : a; o[k] = a == null ? b : lerp(a, b, s); });
+    // a setting given in only one pose starts/ends at neutral (0) in the other, so the move actually happens
+    const ZERO = { abd: 1, fabd: 1, labd: 1, slabd: 1, tw: 1, shrug: 1, heel: 1, hd: 1 };
+    const neutral = (v) => (Array.isArray(v) ? v.map(() => 0) : 0);
+    keys.forEach((k) => {
+      if (k === 'fit') return;
+      let a = def.a[k], b = def.b ? def.b[k] : undefined;
+      if (a == null && b != null && ZERO[k]) a = neutral(b);
+      if (b == null && a != null && ZERO[k] && def.b && Object.prototype.hasOwnProperty.call(def.b, k)) b = neutral(a);
+      if (b == null) b = a;
+      o[k] = a == null ? b : lerp(a, b, s);
+    });
     if (def.b && def.b.fit && s > 0.5) o.fit = def.b.fit; else if (def.a.fit) o.fit = def.a.fit;
     return o;
   }
@@ -403,7 +413,7 @@
       place(P.sh[i], knee, ank, F['sh' + i], -1);
       blob(P.ankle[i], ank);
       let fdir = F['foot' + i];
-      if (heel) fdir = nrm(v3(fdir.x * Math.cos(R(40)), Math.sin(R(40)), fdir.z));
+      if (heel) { const ph = Math.asin(Math.min(1, heel / 8.5)); fdir = nrm(v3(fdir.x * Math.cos(ph), Math.sin(ph), fdir.z * Math.cos(ph))); } // heels lift, toes stay planted
       const toe = add(ank, fdir, 9);
       place(P.foot[i], ank, toe, v3(0, -1, 0), 1);
       P.foot[i].position.copy(W3(add(add(ank, fdir, 4.6), nrm(sub(ank, knee)), 2.2)));
@@ -586,6 +596,7 @@
     thumbURL,
     mount,
     warm() {},
+    _solve: (id, k) => { const d = getDef(id); return d ? solve3(d, poseAt(d, k)).J : null; },
     snap: (id, k, size) => load().then(() => snap(id, k, size || 300)), // debugging / previews
     setHonest(on) { try { localStorage.setItem('gfj.honest', on ? '1' : '0'); } catch (e) {} Object.keys(scenes).forEach((id) => { if (!hero || hero.id !== id) dispose(id); }); if (hero && hero.id) { const id = hero.id; dispose(id); hero.id = null; hero.el = null; } },
   };
