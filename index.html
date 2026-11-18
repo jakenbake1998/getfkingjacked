@@ -294,9 +294,10 @@ body.noscroll{overflow:hidden}
 /* Opening splash. First open: full trailer with sound. Every open after: 1.5s title slam. Then slides up. */
 #splash{position:fixed;inset:0;z-index:100;background:#0d1013;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:transform .38s cubic-bezier(.7,0,.3,1)}
 #splash .sp-bg{position:absolute;inset:-40px;background:url(img/splash/end.jpg) center/cover;filter:blur(28px) brightness(.55)}
-#splash .sp-box{position:relative;width:100%;height:100%;background:url(img/splash/end.jpg) center/contain no-repeat}
+#splash .sp-box{position:relative;width:min(100vw,56.25vh);aspect-ratio:9/16;background:url(img/splash/end.jpg) center/cover no-repeat;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 7%,#000 93%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 7%,#000 93%,transparent 100%)}
+#splash .sp-bgv{position:absolute;left:50%;top:50%;width:140%;height:140%;transform:translate(-50%,-50%);object-fit:cover;filter:blur(26px) brightness(.62) saturate(1.25)}
 #splash.first .sp-box{background-image:url(img/splash/first.jpg)}
-#splash video{width:100%;height:100%;display:block;object-fit:contain}
+#splash .sp-box video{width:100%;height:100%;display:block;object-fit:cover}
 #splash.gone{transform:translateY(-100%)}
 #splash .sp-tap{position:absolute;left:50%;bottom:calc(14% + env(safe-area-inset-bottom));transform:translateX(-50%);font:800 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:#181c20;background:#ffc53d;border:0;border-radius:999px;padding:16px 34px;box-shadow:0 6px 24px rgba(0,0,0,.45);animation:sp-pulse 1.1s ease-in-out infinite}
 #splash .sp-skip{position:absolute;right:16px;top:calc(14px + env(safe-area-inset-top));font:600 15px 'Barlow',sans-serif;color:#fff;background:rgba(0,0,0,.45);border:0;border-radius:999px;padding:8px 14px}
@@ -459,6 +460,22 @@ body.is-dragging{user-select:none;-webkit-user-select:none}
 .about-note{font-size:14px;color:var(--muted);margin:0 4px 10px;line-height:1.35}
 .about-note.ok{color:#7fd69a}
 
+/* v2.0 */
+.top h1{text-transform:uppercase}
+.dchips .dchip{padding:11px 12px 11px 10px;line-height:1.15}
+.inj{padding:6px 0 12px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.inj-top{display:flex;justify-content:space-between;align-items:center}
+.inj-top b{font-size:17px}
+.inj-lv{font-size:13px;font-weight:700;padding:3px 9px;border-radius:999px}
+.inj-lv.sore{background:rgba(242,193,78,.16);color:#f2c14e}
+.inj-lv.injured{background:rgba(239,107,107,.16);color:#ef6b6b}
+.inj-tip{font-size:14px;color:#c9d0d7;margin:6px 0 8px;line-height:1.35}
+.inj-btns{display:grid;grid-template-columns:1.6fr 1fr;gap:8px}
+.inj-sub{font-weight:700;margin:16px 0 4px;padding-top:12px;border-top:1px solid var(--line)}
+.inj-pick{display:grid;grid-template-columns:1fr 90px 90px;gap:8px;align-items:center;padding:6px 0}
+.inj-pick span{font-weight:600}
+.plan-box .lbl:first-child{margin-top:0}
+
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -469,10 +486,15 @@ body.is-dragging{user-select:none;-webkit-user-select:none}
   var sp=document.getElementById('splash'), box=sp.querySelector('.sp-box'), done=false, FLAG='gfj.introSeen';
   var first=false; try{ first=!localStorage.getItem(FLAG); }catch(e){}
   function hide(){ if(done) return; done=true; try{ localStorage.setItem(FLAG,'1'); }catch(e){}
-    var v=sp.querySelector('video'); if(v) v.pause();
+    sp.querySelectorAll('video').forEach(function(x){ x.pause(); });
     sp.classList.add('gone'); setTimeout(function(){ sp.remove(); }, 450); }
   var v=document.createElement('video'); v.setAttribute('playsinline',''); v.playsInline=true; v.preload='auto';
   box.appendChild(v); v.addEventListener('ended', hide);
+  // a blurred, muted copy of the same video fills the screen above and below, kept in step with the real one
+  var bg=document.createElement('video'); bg.className='sp-bgv'; bg.muted=true; bg.setAttribute('muted',''); bg.setAttribute('playsinline',''); bg.playsInline=true; bg.preload='auto';
+  sp.insertBefore(bg, box);
+  v.addEventListener('playing', function(){ bg.src=v.currentSrc||v.src; try{ bg.currentTime=v.currentTime; }catch(e){} var b=bg.play(); if(b&&b.catch) b.catch(function(){}); });
+  v.addEventListener('timeupdate', function(){ if(bg.readyState>1 && Math.abs(bg.currentTime-v.currentTime)>0.25){ try{ bg.currentTime=v.currentTime; }catch(e){} } });
   if(first){
     // First time on this phone: the whole trailer, with sound. Phones block sound until a tap,
     // so if autoplay with sound is refused, show a Tap to start button.
@@ -499,12 +521,12 @@ body.is-dragging{user-select:none;-webkit-user-select:none}
 <nav class="tabs" id="tabs"></nav>
 <div id="detail"></div>
 <div id="overlay"></div>
-<script src="js/data.js?v=1.9"></script>
-<script src="js/exinfo.js?v=1.9"></script>
-<script src="js/figure.js?v=1.9"></script>
-<script src="js/poses.js?v=1.9"></script>
-<script src="js/figure3d.js?v=1.9"></script>
-<script src="js/engine.js?v=1.9"></script>
-<script src="js/app.js?v=1.9"></script>
+<script src="js/data.js?v=2.0"></script>
+<script src="js/exinfo.js?v=2.0"></script>
+<script src="js/figure.js?v=2.0"></script>
+<script src="js/poses.js?v=2.0"></script>
+<script src="js/figure3d.js?v=2.0"></script>
+<script src="js/engine.js?v=2.0"></script>
+<script src="js/app.js?v=2.0"></script>
 </body>
 </html>

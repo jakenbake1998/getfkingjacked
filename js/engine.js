@@ -65,6 +65,18 @@
     s.weights = s.weights || [];
     if (s.rotIdx === undefined) s.rotIdx = null;
     delete s.settings.order;
+    // v2.0: sit-ups were wrongly merged into crunches on import. Jake's only sit-up days were Dec 8 2025 and Jan 8 2026 (no crunches those days).
+    if (!s.fixSitups) {
+      const day = (d) => { d = new Date(d); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+      let moved = false;
+      for (const h of s.history) {
+        if (h.source !== 'fitbod' || !['2025-12-08', '2026-01-08'].includes(day(h.date))) continue;
+        for (const en of h.entries) if (en.ex === 'crunch') { en.ex = 'fb_situp'; moved = true; }
+      }
+      if (moved || s.history.some((h) => h.source === 'fitbod')) s.custom.fb_situp = s.custom.fb_situp || { id: 'fb_situp', name: 'Sit Up', group: 'Core', eq: [], kind: 'mid', unit: 'bw', stress: {} };
+      if (!moved && !s.history.some((h) => h.entries.some((e) => e.ex === 'fb_situp'))) delete s.custom.fb_situp;
+      s.fixSitups = true;
+    }
     return s;
   }
   function load() {
@@ -623,7 +635,7 @@
     'Incline Hammer Curl': 'hammer_curl', 'Superman with Scaption': 'superman', 'Superman Hold': 'superman', 'Ab Rollout': 'ab_wheel',
     'Gorilla Rows': 'kb_gorilla_row', 'EZ-Bar Curl': 'bb_curl', 'Seated Dumbbell Curl': 'db_curl', 'Reverse Barbell Curl': 'reverse_curl',
     'Standing Dumbbell Shoulder Press': 'standing_db_press', 'Reverse Grip Barbell Bent Over Row': 'bb_row', 'Smith Machine Bent Over Row': 'bb_row',
-    'Sit Up': 'crunch', 'Push Up on Knees': 'knee_pushup', 'Straight-Arm Pulldown': 'straight_arm_pd', 'Dumbbell Tricep Extension': 'db_oh_ext',
+    'Push Up on Knees': 'knee_pushup', 'Straight-Arm Pulldown': 'straight_arm_pd', 'Dumbbell Tricep Extension': 'db_oh_ext',
     'Cable Hip Extension': 'cable_kickback_glute',
   };
   const FITBOD_GROUP = {
@@ -631,7 +643,7 @@
     'Standing Barbell Calf Raise': 'Calves', 'Barbell Incline Bench Press': 'Chest', 'Decline Push Up': 'Chest', 'Loop Band Standing Chest Press': 'Chest',
     'Arnold Dumbbell Press': 'Shoulders', 'Upright Row': 'Shoulders', 'Barbell Shrug': 'Back', 'TRX Row': 'Back', 'Australian Chin Up': 'Back', 'Renegade Row': 'Back',
     'Good Morning': 'Hamstrings', 'Dumbbell Good Morning': 'Hamstrings', 'Stiff-Legged Barbell Good Morning': 'Hamstrings',
-    'Diamond Push Up': 'Triceps', 'Tricep Push Up': 'Triceps', 'Leg Pull-In': 'Core', 'Burpee': 'Core',
+    'Diamond Push Up': 'Triceps', 'Tricep Push Up': 'Triceps', 'Leg Pull-In': 'Core', 'Burpee': 'Core', 'Sit Up': 'Core',
   };
   const FITBOD_SKIP = { walking: 1, hiking: 1, running: 1, cycling: 1, elliptical: 1, rowing: 1 };
   Object.keys(FITBOD_ALIAS).forEach((n) => (FITBOD_MAP[norm(n)] = FITBOD_ALIAS[n]));
@@ -667,23 +679,54 @@
     return rows.filter((r) => r.some((x) => x.trim()));
   }
   // Fitbod CSV export: Date, Exercise, Reps, Weight(kg), Duration(s), ..., isWarmup, Note
-  function importFitbod(txt) {
-    const rows = parseCSV(txt);
+  // Strong / Hevy write "Bench Press (Barbell)": also try "Barbell Bench Press".
+  function lookupName(name) {
+    let id = FITBOD_MAP[norm(name)];
+    if (id) return id;
+    const m = name.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+    if (m) {
+      const eq = m[2].replace(/machine|smith machine/i, 'Machine');
+      id = FITBOD_MAP[norm(eq + ' ' + m[1])] || FITBOD_MAP[norm(m[1] + ' ' + eq)] || FITBOD_MAP[norm(m[1])];
+    }
+    return id || null;
+  }
+  // Hevy writes "15 Nov 2026, 18:30"
+  const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+  function parseAnyDate(v) {
+    const m = String(v || '').trim().match(/^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4}),?\s*(\d{1,2})?:?(\d{2})?/);
+    if (m && MONTHS[m[2].toLowerCase()] != null) return new Date(+m[3], MONTHS[m[2].toLowerCase()], +m[1], +(m[4] || 12), +(m[5] || 0));
+    return parseDate(v);
+  }
+  function detectApp(head) {
+    const h = head.join('|');
+    if (/exercise_title/.test(h)) return 'Hevy';
+    if (/set order/.test(h) && /workout name/.test(h)) return 'Strong';
+    if (/iswarmup|multiplier/.test(h)) return 'Fitbod';
+    if (/category/.test(h) && /distance unit/.test(h)) return 'FitNotes';
+    if (/logs?|jefit/i.test(h)) return 'JEFIT';
+    return 'CSV';
+  }
+  // Workout history from Fitbod, Strong, Hevy, JEFIT, FitNotes or any CSV with date, exercise, weight and reps columns.
+  function importHistory(txt, unitHint) {
+    const first = txt.split(/\r?\n/, 1)[0] || '';
+    if ((first.match(/;/g) || []).length > (first.match(/,/g) || []).length) txt = txt.replace(/;/g, ',');
+    const rows = parseCSV(txt.replace(/^\uFEFF/, ''));
     if (rows.length < 2) throw new Error('That file has no rows.');
-    const head = rows[0].map((h) => h.trim().toLowerCase());
+    const head = rows[0].map((h) => h.trim().toLowerCase().replace(/^"|"$/g, ''));
+    const app = detectApp(head);
     const col = (re) => head.findIndex((h) => re.test(h));
-    const cDate = col(/^date/), cEx = col(/exercise/), cReps = col(/^reps/), cW = col(/weight/), cWarm = col(/warm/), cDur = col(/duration/);
-    if (cDate < 0 || cEx < 0) throw new Error('Couldn’t find Date and Exercise columns. Is this the Fitbod export?');
-    const kg = cW >= 0 && /kg/.test(head[cW]);
+    const cDate = col(/^date$|^date\b|start_time|^start|workout date/), cEx = col(/exercise(_| )?(name|title)?$|^exercise/), cReps = col(/^reps$|^reps\b|repetitions/), cW = col(/^weight|weight_(lbs|kg)|^load/), cWarm = col(/warm|set_type/), cDur = col(/duration_seconds|^seconds$|duration\(s\)|^time$/);
+    if (cDate < 0 || cEx < 0) throw new Error('Couldn’t find date and exercise columns in that file. It should be a workout export from Fitbod, Strong, Hevy, JEFIT or FitNotes.');
+    const kg = cW >= 0 && (/kg/.test(head[cW]) || (!/lb/.test(head[cW]) && unitHint === 'kg'));
     const byDay = {};
     let unknown = {};
     for (const r of rows.slice(1)) {
-      if (cWarm >= 0 && /true|1|yes/i.test(r[cWarm] || '')) continue;
-      const d = parseDate(r[cDate]);
+      if (cWarm >= 0 && /true|^1$|yes|warm/i.test(r[cWarm] || '')) continue;
+      const d = parseAnyDate(r[cDate]);
       if (!d) continue;
       const name = (r[cEx] || '').trim();
       if (!name || FITBOD_SKIP[norm(name)]) continue;
-      let id = FITBOD_MAP[norm(name)];
+      let id = lookupName(name);
       if (!id) {
         id = 'fb_' + norm(name);
         if (!S.custom[id]) S.custom[id] = { id, name, group: FITBOD_GROUP[name] || 'Other', eq: [], kind: 'mid', unit: 'lb', stress: {} };
@@ -717,13 +760,13 @@
         else if (['Quads', 'Hamstrings', 'Glutes', 'Calves'].includes(g)) score.legs++;
       });
       const day = Object.keys(score).sort((a, b) => score[b] - score[a])[0];
-      S.history.push({ id: 'fb' + k, date: v.date, day, minutes: null, source: 'fitbod', entries });
+      S.history.push({ id: 'fb' + k, date: v.date, day, minutes: null, source: app === 'Fitbod' ? 'fitbod' : app.toLowerCase(), entries });
       existing.add(k);
       added++;
     }
     S.history.sort((a, b) => new Date(a.date) - new Date(b.date));
     save();
-    return { added, unknown: Object.keys(unknown) };
+    return { added, unknown: Object.keys(unknown), app };
   }
 
   // ---------- muscle recovery (estimate) ----------
@@ -758,6 +801,20 @@
       out.push({ group: g, pct, hoursAgo: Math.round(last) });
     }
     return out.sort((a, b) => a.pct - b.pct);
+  }
+
+  function exportCSV() {
+    const q = (v) => (/[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v));
+    const L = ['Date,Workout,Exercise,Set,Weight (lb),Reps,Warm-up,Est. 1-rep max (lb)'];
+    for (const h of S.history) {
+      const d = new Date(h.date);
+      const ds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      for (const en of h.entries) {
+        const ex = exInfo(en.ex);
+        en.sets.forEach((st, i) => L.push([ds, (DAYS[h.day] && DAYS[h.day].name) || h.day, ex.name, i + 1, ex.unit === 'lb' ? st.w : '', st.r, st.warm ? 'yes' : '', ex.unit === 'lb' ? Math.round(e1rm(st.w, st.r)) : ''].map(q).join(',')));
+      }
+    }
+    return L.join('\n');
   }
 
   // ---------- body weight ----------
@@ -856,6 +913,6 @@
     save, EX, exInfo, e1rm, roundW, nudgeW, blockInfo, nextDayType, blockedBy, allowed, generate, avoidedFor,
     swapItem, swapOptions, swapTo, startWorkout, finishWorkout, reportPain, dislike, unban, volume, rangeStart,
     strengthSeries, liftSeries, setsByGroup, weekStart, liftsTrained, GROUPS, WEEKLY_TARGET, sessionsFor, bestE1rm,
-    exportJSON, importJSON, importFitbod, rackList, recovery, logWeight, bodyweight, standings, exportForClaude, LEVELS, localKey, summaryForClaude, banActive, reset() { localStorage.removeItem(KEY); S = null; },
+    exportJSON, importJSON, importFitbod: importHistory, importHistory, exportCSV, rackList, recovery, logWeight, bodyweight, standings, exportForClaude, LEVELS, localKey, summaryForClaude, banActive, reset() { localStorage.removeItem(KEY); S = null; },
   };
 })();

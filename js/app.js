@@ -151,6 +151,7 @@
 
         <button class="btn-main" data-act="sustart">Start training</button>
         <button class="btn-link" data-act="sujake">I’m Jake: load my gym setup</button>
+        ${localStorage.getItem('gfj.lastErased') ? '<button class="btn-link" data-act="unerase">Undo: bring back what you erased</button>' : ''}
       </div>`;
   }
 
@@ -786,49 +787,51 @@
     const S = E.S;
     const P = S.profile;
     const bans = Object.keys(S.bans).filter(E.banActive);
-    const sore = JOINTS.filter((j) => S.joints[j.id] !== 'ok');
-    app.innerHTML = `<div class="top"><div><div class="kicker">${P.name ? esc(P.name) + ': ' : ''}joints, pain and setup</div><h1>Body</h1></div></div>
-      <div class="card">${JOINTS.map((j) => { const st = S.joints[j.id] || 'ok'; return `<div class="joint"><span class="nm">${j.name}</span><div class="tri">${['ok', 'sore', 'injured'].map((k) => `<button class="${k} ${st === k ? 'on' : ''}" data-act="joint" data-j="${j.id}" data-k="${k}">${{ ok: 'Fine', sore: 'Sore', injured: 'Injured' }[k]}</button>`).join('')}</div></div>`; }).join('')}</div>
-      <div class="sub" style="margin:2px 4px 0">Sore skips the hardest moves for that joint. Injured skips anything that loads it.</div>
-      ${sore.map((j) => `<div class="tip"><b style="color:var(--ink)">${j.name}.</b> ${esc(JOINT_TIPS[j.id])}</div>`).join('')}
-      <button class="btn-quiet" data-act="painsheet">Log pain</button>
+    const hurt = JOINTS.filter((j) => S.joints[j.id] && S.joints[j.id] !== 'ok');
+    const recAll = E.recovery();
+    const rec = E.GROUPS.map((g) => recAll.find((r) => r.group === g) || { group: g, pct: 100 }).sort((x, y) => x.pct - y.pct);
+    const bw = E.bodyweight();
+    app.innerHTML = `<div class="top"><div class="title-i"><h1>Body</h1><button class="info-btn inline" data-act="bodyinfo" aria-label="What’s on this page">i</button></div></div>
 
-      <h2>Avoiding</h2>
-      <div class="card">${bans.length ? bans.map((id) => { const b = S.bans[id]; return `<div class="ban"><div>${esc(E.exInfo(id).name)}<small>${esc(b.note || '')}${b.until ? ' Back on ' + fmtDate(b.until, { month: 'short', day: 'numeric' }) + '.' : ''}</small></div><button data-act="unban" data-id="${id}">Allow again</button></div>`; }).join('') : '<div class="empty">Nothing. Tap ⋯ on an exercise to drop it.</div>'}</div>
+      <h2>Injuries &amp; avoiding</h2>
+      <div class="card">
+        ${hurt.length ? hurt.map((j) => { const lv = S.joints[j.id]; return `<div class="inj"><div class="inj-top"><b>${j.name}</b><span class="inj-lv ${lv}">${lv === 'injured' ? 'Injured' : 'Sore'}</span></div>
+          <div class="inj-tip">${lv === 'injured' ? 'Skipping anything that loads it.' : 'Skipping the hardest moves for it.'} ${esc(JOINT_TIPS[j.id] || '')}</div>
+          <div class="inj-btns"><button class="ghost" data-act="joint" data-j="${j.id}" data-k="${lv === 'injured' ? 'sore' : 'injured'}">${lv === 'injured' ? 'Feeling better: just sore' : 'Worse: mark injured'}</button><button class="ghost" data-act="joint" data-j="${j.id}" data-k="ok">Healed</button></div></div>`; }).join('') : '<div class="empty" style="padding:4px 0 8px">No injuries. Everything is in the plan.</div>'}
+        <div class="two-btn"><button class="btn-quiet" data-act="injadd">+ Add an injury</button><button class="btn-quiet" data-act="painsheet">Log pain</button></div>
+        <div class="inj-sub">Avoiding these exercises</div>
+        ${bans.length ? bans.map((id) => { const b = S.bans[id]; return `<div class="ban"><div>${esc(E.exInfo(id).name)}<small>${esc(b.note || '')}${b.until ? ' Back on ' + fmtDate(b.until, { month: 'short', day: 'numeric' }) + '.' : ''}</small></div><button data-act="unban" data-id="${id}">Allow again</button></div>`; }).join('') : '<div class="sub">None. Tap ⋯ on an exercise to drop it.</div>'}
+      </div>
+
+      <h2>Muscle recovery <button class="info-btn inline" data-act="recinfo" aria-label="How recovery is estimated">i</button></h2>
+      <div class="card">${rec.map((r) => `<div class="rec-row"><span class="rec-g">${r.group}</span><div class="track"><div class="fill ${r.pct >= 90 ? 'met' : r.pct < 50 ? 'low' : ''}" style="width:${r.pct}%"></div></div><span class="rec-p">${r.pct}%</span><small>${r.pct >= 90 ? 'Ready' : 'Trained ' + (r.hoursAgo < 24 ? r.hoursAgo + ' h ago' : Math.round(r.hoursAgo / 24) + ' d ago')}</small></div>`).join('')}</div>
 
       <h2>Pain log</h2>
       <div class="card">${S.painLog.length ? S.painLog.slice().reverse().slice(0, 12).map((p) => `<div class="pain"><b>${fmtDate(p.at, { month: 'short', day: 'numeric' })}: ${esc((JOINTS.find((j) => j.id === p.joint) || { name: 'Other' }).name)}, ${esc(p.severity)}</b>${p.ex ? ` <span>on ${esc(E.exInfo(p.ex).name.toLowerCase())}</span>` : ''}${p.note ? `<br><span>${esc(p.note)}</span>` : ''}</div>`).join('') : '<div class="empty">No pain logged.</div>'}</div>
 
-      <h2>Muscle recovery <button class="info-btn inline" data-act="recinfo" aria-label="How recovery is estimated">i</button></h2>
-      ${(() => { const all = E.recovery(); const rec = all.filter((r) => r.pct < 90); const fresh = E.GROUPS.filter((g) => !rec.some((r) => r.group === g)); return `<div class="card">${rec.length ? rec.map((r) => `<div class="rec-row"><span class="rec-g">${r.group}</span><div class="track"><div class="fill ${r.pct >= 90 ? 'met' : r.pct < 50 ? 'low' : ''}" style="width:${r.pct}%"></div></div><span class="rec-p">${r.pct}%</span><small>${r.pct >= 90 ? 'Ready' : 'Trained ' + (r.hoursAgo < 24 ? r.hoursAgo + ' h ago' : Math.round(r.hoursAgo / 24) + ' d ago')}</small></div>`).join('') : ''}
-        ${fresh.length ? `<div class="rec-ready" style="margin-top:${rec.length ? 10 : 0}px"><b>Ready:</b> ${fresh.join(', ')}</div>` : ''}</div>`; })()}
-
-      <h2>Body weight</h2>
-      <div class="card"><div class="bw-row"><input id="bw-in" class="text-in" inputmode="decimal" placeholder="${E.bodyweight() ? fmtW(E.bodyweight()) : 'Weight'}" aria-label="Body weight in pounds"><span class="bw-u">lb</span><button class="btn-small" data-act="bwsave">Save</button></div>
-        <div class="sub" style="margin-top:8px">${E.bodyweight() ? `Last: ${fmtW(E.bodyweight())} lb on ${fmtDate(S.weights[S.weights.length - 1].date, { month: 'short', day: 'numeric' })}. Chart is on the Progress tab.` : 'Log it now and then. The chart shows on Progress.'}</div></div>
-
       <h2>About you</h2>
-      <div class="about-note ${P.sex && P.age && E.bodyweight() ? 'ok' : ''}">${P.sex && P.age && E.bodyweight() ? `✓ Your lifts are rated against strength standards for ${P.sex === 'f' ? 'women' : 'men'} around ${P.age} at ${fmtW(E.bodyweight())} lb. See How you compare on Progress.` : `Add ${[!P.sex && 'sex', !P.age && 'age', !E.bodyweight() && 'body weight'].filter(Boolean).join(', ')} to rate your lifts against strength standards (Progress → How you compare).`}</div>
-      <div class="chips"><button class="chip ${P.sex === 'm' ? 'on' : ''}" data-act="sex" data-k="m">Male</button><button class="chip ${P.sex === 'f' ? 'on' : ''}" data-act="sex" data-k="f">Female</button></div>
-      <div class="about-row"><label>Age<input id="age-in" class="text-in" inputmode="numeric" value="${P.age || ''}" placeholder="—"></label>
-        <label>Height<span class="ht"><input id="ht-ft" class="text-in" inputmode="numeric" value="${P.heightIn ? Math.floor(P.heightIn / 12) : ''}" placeholder="ft"><input id="ht-in" class="text-in" inputmode="numeric" value="${P.heightIn ? P.heightIn % 12 : ''}" placeholder="in"></span></label></div>
-
-      <h2>Talk it through</h2>
-      <div class="card"><div class="sub" style="color:#c9d0d7">Copy a summary of your joints, pain log and last workouts, then paste it to Claude. Claude can work out what’s causing it and update the app.</div>
-        <button class="btn-main" data-act="copysum" style="margin-top:12px;height:52px;font-size:21px">Copy summary for Claude</button>
-        <div class="sub" style="color:#c9d0d7;margin-top:14px">Or copy your workouts (sets, weights, minutes, estimated calories) to track alongside food in Claude.</div>
-        <div class="two-btn"><button class="btn-quiet" data-act="copyclaude" data-k="7">Last 7 days</button><button class="btn-quiet" data-act="copyclaude" data-k="30">Last 30 days</button></div></div>
-      <button class="btn-link" data-act="methodinfo">How your plan decides weights and reps</button>
+      <div class="card">
+        <div class="about-note ${P.sex && P.age && bw ? 'ok' : ''}">${P.sex && P.age && bw ? `✓ Your lifts are rated against strength standards for ${P.sex === 'f' ? 'women' : 'men'} around ${P.age} at ${fmtW(bw)} lb. See How you compare on Progress.` : `Add ${[!P.sex && 'sex', !P.age && 'age', !bw && 'body weight'].filter(Boolean).join(', ')} to rate your lifts against strength standards (Progress → How you compare).`}</div>
+        <div class="chips"><button class="chip ${P.sex === 'm' ? 'on' : ''}" data-act="sex" data-k="m">Male</button><button class="chip ${P.sex === 'f' ? 'on' : ''}" data-act="sex" data-k="f">Female</button></div>
+        <div class="about-row"><label>Age<input id="age-in" class="text-in" inputmode="numeric" value="${P.age || ''}" placeholder="—"></label>
+          <label>Height<span class="ht"><input id="ht-ft" class="text-in" inputmode="numeric" value="${P.heightIn ? Math.floor(P.heightIn / 12) : ''}" placeholder="ft"><input id="ht-in" class="text-in" inputmode="numeric" value="${P.heightIn ? P.heightIn % 12 : ''}" placeholder="in"></span></label></div>
+        <div class="lbl" style="margin-top:14px">Body weight</div>
+        <div class="bw-row"><input id="bw-in" class="text-in" inputmode="decimal" placeholder="${bw ? fmtW(bw) : 'Weight'}" aria-label="Body weight in pounds"><span class="bw-u">lb</span><button class="btn-small" data-act="bwsave">Save</button></div>
+        <div class="sub" style="margin-top:8px">${bw ? `Last: ${fmtW(bw)} lb on ${fmtDate(S.weights[S.weights.length - 1].date, { month: 'short', day: 'numeric' })}. Chart is on the Progress tab.` : 'Log it now and then. The chart shows on Progress.'}</div>
+      </div>
 
       <h2>Your plan</h2>
-      <div class="lbl">Goal</div>
-      <div class="chips">${Object.keys(GOALS).map((k) => `<button class="chip ${P.goal === k ? 'on' : ''}" data-act="prof" data-k="goal" data-v="${k}">${GOALS[k].name}</button>`).join('')}</div>
-      <div class="lbl">Weekly plan</div>
-      <div class="chips">${Object.keys(SPLITS).map((k) => `<button class="chip ${P.split === k ? 'on' : ''}" data-act="prof" data-k="split" data-v="${k}">${SPLITS[k].name}</button>`).join('')}</div>
-      <div class="lbl">Workout length</div>
-      <div class="chips">${[30, 40, 45, 60, 75, 90].map((m) => `<button class="chip ${S.settings.minutes === m ? 'on' : ''}" data-act="mins" data-k="${m}">${m} min</button>`).join('')}</div>
-      <div class="lbl">Daily step goal</div>
-      <div class="chips">${[0, 6000, 8000, 10000, 12000].map((n) => `<button class="chip ${P.stepGoal === n ? 'on' : ''}" data-act="prof" data-k="stepGoal" data-v="${n}">${n ? n.toLocaleString() : 'Off'}</button>`).join('')}</div>
+      <div class="card plan-box">
+        <div class="lbl">Goal</div>
+        <div class="chips">${Object.keys(GOALS).map((k) => `<button class="chip ${P.goal === k ? 'on' : ''}" data-act="prof" data-k="goal" data-v="${k}">${GOALS[k].name}</button>`).join('')}</div>
+        <div class="lbl">Weekly plan</div>
+        <div class="chips">${Object.keys(SPLITS).map((k) => `<button class="chip ${P.split === k ? 'on' : ''}" data-act="prof" data-k="split" data-v="${k}">${SPLITS[k].name}</button>`).join('')}</div>
+        <div class="lbl">Workout length</div>
+        <div class="chips">${[30, 40, 45, 60, 75, 90].map((m) => `<button class="chip ${S.settings.minutes === m ? 'on' : ''}" data-act="mins" data-k="${m}">${m} min</button>`).join('')}</div>
+        <div class="lbl">Daily step goal</div>
+        <div class="chips">${[0, 6000, 8000, 10000, 12000].map((n) => `<button class="chip ${P.stepGoal === n ? 'on' : ''}" data-act="prof" data-k="stepGoal" data-v="${n}">${n ? n.toLocaleString() : 'Off'}</button>`).join('')}</div>
+        <button class="btn-link" data-act="methodinfo" style="margin-top:6px">How your plan decides weights and reps</button>
+      </div>
 
       <h2>Your equipment</h2>
       <div class="card">${EQUIPMENT.map((e) => `<div class="toggle"><span>${esc(e.name)}</span><button class="sw ${S.settings.equipment[e.id] ? 'on' : ''}" data-act="eq" data-k="${e.id}" role="switch" aria-checked="${!!S.settings.equipment[e.id]}" aria-label="${esc(e.name)}"></button></div>`).join('')}</div>
@@ -838,16 +841,25 @@
         : `<div class="card"><div class="rack-line"><b>2.5 – 25 lb</b><span>in 2.5 lb steps</span></div><div class="rack-line"><b>30 – ${max} lb</b><span>in 5 lb steps</span></div>
           <div class="lbl" style="margin-top:12px">Heaviest pair</div><div class="chips">${[50, 75, 100, 120, 150].map((m) => `<button class="chip ${max === m ? 'on' : ''}" data-act="rackmax" data-k="${m}">${m} lb</button>`).join('')}</div></div>`}`; })() : ''}
 
+      <h2>Talk it through</h2>
+      <div class="card"><div class="sub" style="color:#c9d0d7">Copy a summary of your injuries, pain log and last workouts, then paste it to Claude. Claude can work out what’s causing it and update the app.</div>
+        <button class="btn-main" data-act="copysum" style="margin-top:12px;height:52px;font-size:21px">Copy summary for Claude</button>
+        <div class="sub" style="color:#c9d0d7;margin-top:14px">Or copy your workouts (sets, weights, minutes, estimated calories) to track alongside food in Claude.</div>
+        <div class="two-btn"><button class="btn-quiet" data-act="copyclaude" data-k="7">Last 7 days</button><button class="btn-quiet" data-act="copyclaude" data-k="30">Last 30 days</button></div></div>
+
       <h2>Your data</h2>
       <div class="sub">Everything is saved on this phone only. Back it up now and then.</div>
+      <button class="btn-quiet" data-act="importfb">Import workout history</button>
+      <div class="sub" style="margin:6px 4px 0;font-size:13px">From Fitbod, Strong, Hevy, JEFIT, FitNotes or any CSV with date, exercise, weight and reps.</div>
+      <button class="btn-quiet" data-act="exportcsv">Export all workouts (CSV)</button>
       <button class="btn-quiet" data-act="export">Save a backup</button>
       <button class="btn-quiet" data-act="importbk">Restore a backup</button>
-      <button class="btn-quiet" data-act="importfb">Bring in Fitbod history (CSV)</button>
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
-      <input type="file" id="filefb" accept=".csv,text/csv" hidden>
-      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v1.9</div>`;
+      <input type="file" id="filefb" accept=".csv,text/csv,text/plain" hidden>
+      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.0</div>`;
   }
+
 
   // ---------------- actions ----------------
   function updateSet(i, j, field, val) {
@@ -1023,7 +1035,7 @@
         break;
       }
       case 'lift': liftSheet(el.dataset.id); break;
-      case 'joint': E.S.joints[el.dataset.j] = el.dataset.k; E.save(); afterPlanChange(); render(); break;
+      case 'joint': E.S.joints[el.dataset.j] = el.dataset.k; E.save(); afterPlanChange(); render(); if (el.dataset.k === 'ok') toast('Marked healed. Back in the plan'); break;
       case 'unban': E.unban(el.dataset.id); afterPlanChange(); render(); break;
       case 'mins': E.S.settings.minutes = +el.dataset.k; E.save(); afterPlanChange(); render(); break;
       case 'prof': { const v = el.dataset.v; E.S.profile[el.dataset.k] = isNaN(+v) ? v : +v; if (el.dataset.k === 'split') { E.S.rotIdx = 0; ui.planDay = null; } E.save(); afterPlanChange(); render(); break; }
@@ -1048,7 +1060,25 @@
       }
       case 'importbk': $('#filebk').click(); break;
       case 'importfb': $('#filefb').click(); break;
-      case 'reset': if (confirm('Erase all workouts, pain notes and settings on this phone? This can’t be undone.')) { localStorage.removeItem('spotter.v1'); location.reload(); } break;
+      case 'reset': {
+        const t = prompt('This erases every workout, your pain log and settings on this phone.\n\nType ERASE to confirm.');
+        if (t == null) break;
+        if (t.trim().toUpperCase() !== 'ERASE') { toast('Not erased. Type ERASE to confirm.'); break; }
+        try { localStorage.setItem('gfj.lastErased', localStorage.getItem('spotter.v1') || ''); localStorage.setItem('gfj.lastErasedAt', new Date().toISOString()); } catch (e) {}
+        localStorage.removeItem('spotter.v1'); location.reload(); break;
+      }
+      case 'unerase': { const v = localStorage.getItem('gfj.lastErased'); if (v && confirm('Bring back everything you erased?')) { localStorage.setItem('spotter.v1', v); localStorage.removeItem('gfj.lastErased'); location.reload(); } break; }
+      case 'exportcsv': {
+        const blob = new Blob([E.exportCSV()], { type: 'text/csv' });
+        const name = 'jacked-workouts-' + new Date().toISOString().slice(0, 10) + '.csv';
+        const file = new File([blob], name, { type: 'text/csv' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file], title: 'Workout history' }).catch(() => {});
+        else { const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = name; a2.click(); }
+        break;
+      }
+      case 'bodyinfo': sheet(`<h3>Body</h3><ol class="steps-list"><li><b>Injuries &amp; avoiding:</b> joints you’re protecting and exercises you’ve dropped. The plan works around both.</li><li><b>Muscle recovery:</b> how rested each muscle is, from what you’ve trained lately.</li><li><b>Pain log:</b> everything you’ve reported, for spotting patterns.</li><li><b>About you</b> and <b>Your plan:</b> your details, goal and schedule.</li><li><b>Your data:</b> import from other apps, export, and backups. Everything stays on this phone.</li></ol>`); break;
+      case 'injadd': sheet(`<h3>Add an injury</h3><p>Pick the joint and how bad. The plan will work around it.</p>${JOINTS.filter((j) => (E.S.joints[j.id] || 'ok') === 'ok').map((j) => `<div class="inj-pick"><span>${j.name}</span><button class="opt" data-act="injset" data-j="${j.id}" data-k="sore">Sore</button><button class="opt" data-act="injset" data-j="${j.id}" data-k="injured">Injured</button></div>`).join('') || '<div class="empty">Every joint is already flagged.</div>'}`); break;
+      case 'injset': E.S.joints[el.dataset.j] = el.dataset.k; E.save(); closeSheet(); afterPlanChange(); render(); toast((JOINTS.find((j) => j.id === el.dataset.j) || {}).name + ': ' + el.dataset.k + '. Plan updated'); break;
     }
   });
 
@@ -1163,21 +1193,24 @@
     const el = ev.target.closest && (ev.target.closest('.sheet') || ev.target.closest('#detail .detail'));
     if (!el || ev.target.closest('svg.chart') || ev.target.closest('.hero-fig')) return;
     if (el.scrollTop > 0) return;
-    swipe = { el, y: ev.touches[0].clientY, dy: 0, sheet: el.classList.contains('sheet') };
+    swipe = { el, y: ev.touches[0].clientY, dy: 0, sheet: el.classList.contains('sheet'), lastY: ev.touches[0].clientY, dir: 0, t: Date.now(), v: 0 };
   }, { passive: true });
   document.addEventListener('touchmove', (ev) => {
     if (!swipe || drag) return;
-    const dy = ev.touches[0].clientY - swipe.y;
+    const cy = ev.touches[0].clientY, dy = cy - swipe.y, now = Date.now();
+    if (Math.abs(cy - swipe.lastY) > 0.5) { swipe.dir = cy > swipe.lastY ? 1 : -1; swipe.v = (cy - swipe.lastY) / Math.max(1, now - swipe.t); }
+    swipe.lastY = cy; swipe.t = now;
     if (swipe.el.scrollTop > 0 || dy < 0) { if (!swipe.dy) { swipe = null; return; } }
     swipe.dy = Math.max(0, dy);
     if (swipe.dy > 6) { ev.preventDefault(); swipe.el.style.transition = 'none'; swipe.el.style.transform = `translateY(${swipe.dy}px)`; }
   }, { passive: false });
   document.addEventListener('touchend', () => {
     if (!swipe) return;
-    const { el, dy, sheet: isSheet } = swipe;
+    const { el, dy, sheet: isSheet, dir, v } = swipe;
     swipe = null;
     el.style.transition = 'transform .22s ease';
-    if (dy > 110) {
+    // closes only if you were still pulling down when you let go (or flicked down fast); any move back up keeps it open
+    if ((dy > 110 && dir > 0) || (dy > 30 && v > 0.9)) {
       el.style.transform = 'translateY(100%)';
       setTimeout(() => { el.style.transition = ''; el.style.transform = ''; if (isSheet) overlay.innerHTML = ''; else { ui.detail = null; detailEl.textContent = ''; document.body.classList.remove('noscroll'); render(); } }, 200);
     } else { el.style.transform = ''; setTimeout(() => (el.style.transition = ''), 230); }
@@ -1203,7 +1236,7 @@
       f.text().then((txt) => {
         try {
           if (t.id === 'filebk') { E.importJSON(txt); toast('Backup restored'); }
-          else { const r = E.importFitbod(txt); toast('Added ' + r.added + ' workouts from Fitbod' + (r.unknown.length ? '. ' + r.unknown.length + ' exercises kept as custom' : '')); }
+          else { const r = E.importHistory(txt); toast('Added ' + r.added + ' workouts' + (r.app !== 'CSV' ? ' from ' + r.app : '') + (r.unknown.length ? '. ' + r.unknown.length + ' exercises kept as custom' : '')); }
           ui.plan = null; render();
         } catch (e) { toast(e.message || 'Couldn’t read that file'); }
       });
