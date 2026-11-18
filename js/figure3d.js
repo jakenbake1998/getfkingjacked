@@ -18,7 +18,7 @@
   const has = (id) => !!getDef(id);
   let T = null, loading = null, failed = false;
   const thumbs = {};
-  try { Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v4') || '{}')); } catch (e) {}
+  try { Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v5') || '{}')); } catch (e) {}
 
   function load() {
     if (T) return Promise.resolve(T);
@@ -242,6 +242,45 @@
   }
   const JAKE = { skin: 0xd59a6f, tank: 0x16a184, shorts: 0x15171b, shoe: 0xf1f1ee, hair: 0x22160f, sock: 0xe8e8e4 };
   const honestOn = () => { try { return localStorage.getItem('gfj.honest') === '1'; } catch (e) { return false; } };
+  // ---------- hands: which way the palm faces for each exercise ----------
+  // over = palms down/back (pronated), under = palms up/forward (supinated), neutral = palms facing each other, open = flat hand
+  const GRIP = {
+    db_curl: 'under', bb_curl: 'under', cable_curl: 'under', incline_curl: 'under', conc_curl: 'under', chinup: 'under',
+    hammer_curl: 'neutral', rope_hammer_curl: 'neutral', neutral_pullup: 'neutral', dip: 'neutral', db_row: 'neutral', cs_db_row: 'neutral',
+    db_bo_row: 'neutral', kb_gorilla_row: 'neutral', sa_cable_row: 'neutral', seated_cable_row: 'neutral', db_kickback: 'neutral', cable_kickback: 'neutral',
+    db_fly: 'neutral', floor_fly: 'neutral', rear_delt_fly: 'neutral', db_oh_ext: 'neutral', landmine_press: 'neutral', kb_press: 'neutral',
+    db_bench: 'over', db_incline: 'over', db_floor_press: 'over', db_shoulder_press: 'over', standing_db_press: 'over', db_lateral: 'over', db_front_raise: 'over',
+    reverse_curl: 'over', cable_lateral: 'neutral', face_pull: 'neutral', pallof: 'neutral', woodchop: 'neutral', db_thruster: 'neutral',
+    fb_arnolddumbbellpress: 'under', fb_renegaderow: 'neutral', fb_australianchinup: 'over', fb_trxrow: 'neutral', fb_uprightrow: 'over', fb_barbellshrug: 'over',
+  };
+  function gripFor(id, def) {
+    if (GRIP[id]) return GRIP[id];
+    const h = def.hold;
+    if (h === 'bar' || h === 'cbar' || h === 'backbar' || h === 'wheel' || def.pullbar) return 'over';
+    if (h === 'db' || h === 'db1' || h === 'kb' || h === 'kb1' || h === 'goblet' || h === 'kbmid' || h === 'handle' || h === 'rope' || h === 'landmine' || h === 'hipdb' || h === 'hipbar') return 'neutral';
+    return 'open';
+  }
+  // A hand built in its own frame: Y = along the fingers, X = out of the palm, Z = across the palm (thumb side +Z).
+  function makeHand(m, closed) {
+    const g = new T.Group();
+    const palm = new T.Mesh(new T.SphereGeometry(1, 18, 14), m); palm.scale.set(1.05, 2.35, 2.0); palm.position.set(0, 2.4, 0); g.add(palm);
+    const knuck = new T.Mesh(new T.CapsuleGeometry(0.95, 2.4, 4, 8), m); knuck.rotation.x = Math.PI / 2; knuck.position.set(0, 4.3, -0.25); g.add(knuck);
+    const seg = (len, r) => new T.CapsuleGeometry(r, len, 4, 8).translate(0, len / 2, 0);
+    [-1.35, -0.45, 0.45, 1.35].forEach((z, k) => {
+      const L1 = k === 0 ? 1.7 : 2.1, L2 = k === 0 ? 1.4 : 1.8;
+      const f1 = new T.Mesh(seg(L1, 0.52), m), f2 = new T.Mesh(seg(L2, 0.48), m);
+      const b = new T.Group(); b.position.set(0, 4.4, z - 0.25); g.add(b);
+      b.add(f1); const j = new T.Group(); j.position.y = L1 + 0.3; f1.add(j); j.add(f2);
+      // curl toward the palm (+X) when gripping
+      f1.rotation.z = closed ? -1.35 : -0.12; f2.rotation.z = closed ? -1.45 : -0.15;
+    });
+    const tb = new T.Group(); tb.position.set(0.5, 1.4, 1.9); g.add(tb);
+    const t1 = new T.Mesh(seg(1.7, 0.62), m), t2 = new T.Mesh(seg(1.4, 0.55), m);
+    tb.add(t1); const tj = new T.Group(); tj.position.y = 2.0; t1.add(tj); tj.add(t2);
+    if (closed) { tb.rotation.set(0.5, 0, -0.95); tj.rotation.z = -0.8; } else { tb.rotation.set(0.9, 0, -0.35); tj.rotation.z = -0.2; }
+    return g;
+  }
+
   // ---------- one scene per exercise ----------
   const scenes = {};
   function tint(lvl) { return lvl === 1 ? RED : lvl === 2 ? ORANGE : null; }
@@ -328,9 +367,19 @@
     const P = {
       torso: M(G.torso), pelvis: M(G.pelvis), neck: M(G.neck), head: M(G.head), chin: M(G.chin),
       ua: [M(G.ua), M(G.ua)], fa: [M(G.fa), M(G.fa)], th: [M(G.th), M(G.th)], sh: [M(G.sh), M(G.sh)],
-      delt: [M(G.delt), M(G.delt)], elbow: [M(G.elbow), M(G.elbow)], knee: [M(G.knee), M(G.knee)], hand: [M(G.hand), M(G.hand)], thumb: [M(G.thumb), M(G.thumb)],
+      delt: [M(G.delt), M(G.delt)], elbow: [M(G.elbow), M(G.elbow)], knee: [M(G.knee), M(G.knee)],
       foot: [M(G.foot), M(G.foot)], hipj: [M(G.hipj), M(G.hipj)], ankle: [M(G.ankle), M(G.ankle)],
     };
+    { // hands with fingers, closed around whatever is held
+      const grip = gripFor(id, def);
+      const hm = jake ? new T.MeshToonMaterial({ color: JAKE.skin, gradientMap: rampTex() }) : new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
+      const closed = grip !== 'open';
+      const hands = [makeHand(hm, closed), makeHand(hm, closed)];
+      const HS = 1.65; // real-hand size against the forearm
+      hands[0].scale.set(HS, HS, HS); hands[1].scale.set(HS, HS, -HS); // mirror for the other hand
+      hands.forEach((hg) => { rig.add(hg); if (jake) { const ms = []; hg.traverse((o) => { if (o.isMesh) ms.push(o); }); ms.forEach((o) => o.add(new T.Mesh(o.geometry, ink()))); } });
+      P.hand = hands; P.grip = grip;
+    }
     if (jake) { // face: eyes, brows, nose, the mustache
       const fm = new T.MeshToonMaterial({ color: JAKE.hair, gradientMap: rampTex() });
       const nm = withGlow(new T.MeshToonMaterial({ color: JAKE.skin, gradientMap: rampTex() }), 0);
@@ -476,9 +525,20 @@
       blob(P.elbow[i], elb);
       place(P.fa[i], elb, hand, F['fa' + i], -1);
       const fd = nrm(sub(hand, elb));
-      blob(P.hand[i], add(hand, fd, 2.5), elb, hand, F['fa' + i]);
-      const side = cross(fd, F['fa' + i]);
-      blob(P.thumb[i], add(add(add(hand, fd, 1.2), F['fa' + i], 2), side, (i ? 1 : -1) * 1.4), elb, hand, F['fa' + i]);
+      { // hand frame: Y along the forearm, X out of the palm (by grip), Z across (thumb side)
+        const ff = F['fa' + i];
+        const mid = nrm(cross(fd, ff)); // points toward the body's midline for the near hand
+        let palm = P.grip === 'under' ? ff : P.grip === 'over' ? v3(-ff.x, -ff.y, -ff.z) : P.grip === 'neutral' ? (i === 0 ? mid : v3(-mid.x, -mid.y, -mid.z)) : v3(-ff.x, -ff.y, -ff.z);
+        if (P.grip === 'open') palm = nrm(add(palm, fd, -0.2));
+        const Yw = new T.Vector3(fd.x, -fd.y, fd.z).normalize();
+        const Xw = new T.Vector3(palm.x, -palm.y, palm.z); Xw.addScaledVector(Yw, -Xw.dot(Yw)).normalize();
+        let Zw = new T.Vector3().crossVectors(Xw, Yw).normalize();
+        const hgp = P.hand[i];
+        hgp.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(Xw, Yw, Zw));
+        // the fist (grip centre) sits on the hand joint, where the bar or handle is
+        const HS = 1.65, gx = P.grip === 'open' ? 0.2 : 1.5, gy = P.grip === 'open' ? 3.4 : 4.9;
+        hgp.position.copy(W3(add(add(hand, fd, -gy * HS), palm, -gx * HS)));
+      }
       const hj = J['hipj' + i], knee = J['knee' + i], ank = J['ankle' + i];
       place(P.th[i], hj, knee, F['th' + i], -1);
       blob(P.hipj[i], add(hj, tdir, 1.5), J.hip, J.sho, F.torso);
@@ -492,7 +552,7 @@
       P.foot[i].position.copy(W3(add(add(ank, fdir, 4.6), nrm(sub(ank, knee)), 2.2)));
       if (props.hold[i]) {
         const g = props.hold[i];
-        g.position.copy(W3(add(hand, fd, 2.5)));
+        g.position.copy(W3(hand));
         if (def.hold === 'kb' || def.hold === 'kb1') g.quaternion.identity(); else g.rotation.set(0, 0, Math.atan2(-fd.y, fd.x));
       }
       if (props.rope) props.rope[i].position.copy(W3(add(hand, v3(0, 6, i ? -1.5 : 1.5))));
@@ -541,16 +601,16 @@
       const hang = add(add(A2, v3(0, 1, 0), 3.2), F.torso, -0.5);
       H.b0.position.copy(W3(add(hang, side, 2.4))); H.b1.position.copy(W3(add(hang, side, -2.4)));
     }
-    if (props.mid) props.mid.position.copy(W3(add(J.mid, nrm(sub(J.hand0, J.elb0)), def.hold === 'wheel' ? 6 : def.hold === 'kbmid' ? 1 : 2.5)));
+    if (props.mid) props.mid.position.copy(W3(add(J.mid, nrm(sub(J.hand0, J.elb0)), def.hold === 'wheel' ? 4 : 0)));
     if (props.back) props.back.position.copy(W3(add(add(J.sho, nrm(sub(J.sho, J.hip)), 2), F.torso, -9)));
     if (props.hipbar) props.hipbar.position.copy(W3(add(J.hip, F.torso, 13)));
     if (props.hipdb) props.hipdb.position.copy(W3(add(J.hip, F.torso, 14)));
-    if (props.handle) props.handle.position.copy(W3(add(J.mid, nrm(sub(J.hand0, J.elb0)), 2)));
+    if (props.handle) props.handle.position.copy(W3(J.mid));
     if (props.land) { const piv = v3(def.landPivot ? def.landPivot[0] : 20, FLOOR - 2, 0); const tip = add(J.hand0, nrm(sub(J.hand0, J.elb0)), 2); place(props.land, piv, tip); props.land.scale.set(1, len3(sub(tip, piv)), 1); const d = nrm(sub(tip, piv)); props.landPlate.position.copy(W3(add(piv, d, 10))); place(props.landPlate, add(piv, d, 8), add(piv, d, 12)); props.landPlate.position.copy(W3(add(piv, d, 10))); }
     if (props.cable) {
       const c = def.cable, A = v3(c[0], c[1], c[2] || 0);
       const to = def.cableTo || 'hand0';
-      let Hh = J[to] || J.hand0;
+      let Hh = to === 'kneeback' ? add(J.knee0, F.th0, -6) : J[to] || J.hand0; // kneeback: strap around the back of the knee
       if (to === 'hand0' && def.handsZ == null && !def.cable[2]) Hh = J.hand0;
       place(props.cable, A, Hh);
       props.cable.scale.set(1, len3(sub(Hh, A)), 1);
@@ -655,7 +715,7 @@
     load().then(() => {
       let n = 0;
       for (const id of [...want]) { thumbs[figStyle() + '|' + id] = snap(id, 1, 128); want.delete(id); if (!hero || hero.id !== id) dispose(id); if (++n >= 6) break; }
-      try { localStorage.setItem('gfj.figthumbs.v4', JSON.stringify(thumbs)); } catch (e) {}
+      try { localStorage.setItem('gfj.figthumbs.v5', JSON.stringify(thumbs)); } catch (e) {}
       window.dispatchEvent(new Event('figthumbs'));
       if (want.size) thumbJob = setTimeout(runThumbs, 60);
     }).catch(() => {});

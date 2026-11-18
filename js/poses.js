@@ -212,9 +212,11 @@
   add('step_up', { root: 'ankle0', at: [132, 150 - 5.5], box: { x0: 112, x1: 162, top: 150 }, hold: 'db', handsZ: 22,
     a: { t: 18, ua: [4, 4], fa: [0, 0], th: [86, -4], sh: [-14, 2] },
     b: { t: 0, ua: [4, 4], fa: [0, 0], th: [2, 70], sh: [0, 0] } });
-  add('tke', standing({ cable: [184, 150], cableTo: 'knee0', target: { quadriceps: 1 }, ground: ['ankle0'],
-    a: { t: 10, ua: [30, 4], fa: [60, 2], th: [44, -6], sh: [-36, 4] },
-    b: { t: 2, ua: [30, 4], fa: [60, 2], th: [-4, -6], sh: [2, 4] } }));
+  // Terminal knee extension: cable anchored in front at knee height, looped behind the working knee.
+  // Stand on that foot, other foot back on its toes; push the knee back from slightly bent to locked straight.
+  add('tke', standing({ cable: [178, 146], cableTo: 'kneeback', target: { quadriceps: 1 }, ground: ['ankle0'], cam: [0.25, 0.2, 0.95], period: 2200,
+    a: { t: 6, ua: [-24, -24], abd: [34, 34], fa: [72, 72], fabd: [-34, -34], th: [34, -12], sh: [-30, -46] },
+    b: { t: 2, ua: [-24, -24], abd: [34, 34], fa: [72, 72], fabd: [-34, -34], th: [-3, -12], sh: [2, -46] } }));
   add('db_thruster', standing({ hold: 'db', handsZ: 21,
     a: { t: 28, hd: -10, ua: [20, 20], fa: [168, 168], th: [78, 78], sh: [-30, -30] },
     b: { t: 0, ua: [178, 178], fa: [178, 178], th: [0, 0], sh: [0, 0] } }));

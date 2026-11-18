@@ -32,9 +32,9 @@
       b: { at: [100, 126], t: -90, hd: 0, ua: [170, 166], fa: [176, 172], th: [62, 52], sh: [2, -4] },
     },
     pallof: {
-      cam: [0.55, 0.1, 0.83],
-      handsZ: 3,
-      view: [0, 8, 240, 182], mini: [40, 10, 170, 170], root: 'ankle', hold: 'handle', cable: [22, 62],
+      cam: [0.72, 0.32, -0.62], // from the front, on the machine's side, so the cable reads as coming in sideways
+      handsZ: 3, cableTo: 'mid',
+      root: 'ankle', hold: 'handle', cable: [152, 64, -92], // machine beside him at chest height (stand side-on to it)
       prop: '<g class="fg-prop"><rect x="10" y="20" width="12" height="166" rx="3"/><rect x="18" y="56" width="10" height="12" rx="2"/></g>',
       target: { abs: 1, obliques: 1, shoulders: 2 },
       a: { at: [120, 184], t: 3, hd: 0, ua: [-14, -18], fa: [128, 124], th: [10, 2], sh: [-7, -3] },
