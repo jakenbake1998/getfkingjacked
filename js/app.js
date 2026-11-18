@@ -826,15 +826,16 @@
       </div>
 
       <h2>Your plan</h2>
-      <div class="card plan-box">
+      ${(() => { const cur = { goal: P.goal, split: P.split, minutes: S.settings.minutes, stepGoal: P.stepGoal }; const D = Object.assign({}, cur, ui.planDraft || {}); const dirty = Object.keys(D).some((k) => D[k] !== cur[k]); const ch = (k, v) => (D[k] === v ? 'on' : '') + (D[k] === v && cur[k] !== v ? ' pending' : ''); return `<div class="card plan-box ${dirty ? 'dirty' : ''}">
         <div class="lbl">Goal</div>
-        <div class="chips">${Object.keys(GOALS).map((k) => `<button class="chip ${P.goal === k ? 'on' : ''}" data-act="prof" data-k="goal" data-v="${k}">${GOALS[k].name}</button>`).join('')}</div>
+        <div class="chips">${Object.keys(GOALS).map((k) => `<button class="chip ${ch('goal', k)}" data-act="plandraft" data-k="goal" data-v="${k}">${GOALS[k].name}</button>`).join('')}</div>
         <div class="lbl">Weekly plan</div>
-        <div class="chips">${Object.keys(SPLITS).map((k) => `<button class="chip ${P.split === k ? 'on' : ''}" data-act="prof" data-k="split" data-v="${k}">${SPLITS[k].name}</button>`).join('')}</div>
+        <div class="chips">${Object.keys(SPLITS).map((k) => `<button class="chip ${ch('split', k)}" data-act="plandraft" data-k="split" data-v="${k}">${SPLITS[k].name}</button>`).join('')}</div>
         <div class="lbl">Workout length</div>
-        <div class="chips">${[30, 40, 45, 60, 75, 90].map((m) => `<button class="chip ${S.settings.minutes === m ? 'on' : ''}" data-act="mins" data-k="${m}">${m} min</button>`).join('')}</div>
+        <div class="chips">${[30, 40, 45, 60, 75, 90].map((m) => `<button class="chip ${ch('minutes', m)}" data-act="plandraft" data-k="minutes" data-v="${m}">${m} min</button>`).join('')}</div>
         <div class="lbl">Daily step goal</div>
-        <div class="chips">${[0, 6000, 8000, 10000, 12000].map((n) => `<button class="chip ${P.stepGoal === n ? 'on' : ''}" data-act="prof" data-k="stepGoal" data-v="${n}">${n ? n.toLocaleString() : 'Off'}</button>`).join('')}</div>
+        <div class="chips">${[0, 6000, 8000, 10000, 12000].map((n) => `<button class="chip ${ch('stepGoal', n)}" data-act="plandraft" data-k="stepGoal" data-v="${n}">${n ? n.toLocaleString() : 'Off'}</button>`).join('')}</div>
+        ${dirty ? `<div class="plan-save"><button class="btn-main" data-act="plansave">Save changes</button><button class="btn-link" data-act="planundo">Undo</button></div>` : ''}`; })()}
         <button class="btn-link" data-act="methodinfo" style="margin-top:6px">How your plan decides weights and reps</button>
       </div>
 
@@ -862,7 +863,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv,text/plain" hidden>
-      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.2</div>`;
+      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.3</div>`;
   }
 
 
@@ -923,7 +924,18 @@
       }
       case 'sujake': if (confirm('Load Jake’s gym setup, sore elbows and knees, and his Fitbod history on this phone?')) { E.setup('jake'); ui.setup = null; render(); } break;
 
-      case 'tab': if (ui.tab !== el.dataset.k) { ui.tab = el.dataset.k; ui.detail = null; app.classList.remove('tabin'); void app.offsetWidth; app.classList.add('tabin'); render(); window.scrollTo(0, 0); } break;
+      case 'plandraft': { const k = el.dataset.k, v = el.dataset.v; ui.planDraft = ui.planDraft || {}; ui.planDraft[k] = isNaN(+v) ? v : +v; render(); break; }
+      case 'planundo': ui.planDraft = null; render(); break;
+      case 'plansave': {
+        const d = ui.planDraft || {}; const P = E.S.profile;
+        if (d.goal != null) P.goal = d.goal;
+        if (d.split != null && d.split !== P.split) { P.split = d.split; E.S.rotIdx = 0; ui.planDay = null; }
+        if (d.stepGoal != null) P.stepGoal = d.stepGoal;
+        if (d.minutes != null) E.S.settings.minutes = d.minutes;
+        ui.planDraft = null; E.save(); afterPlanChange(); render(); toast('Saved ✓ Your next workout uses the new plan');
+        break;
+      }
+      case 'tab': if (ui.tab !== el.dataset.k) { if (ui.planDraft) { ui.planDraft = null; toast('Plan changes not saved'); } ui.tab = el.dataset.k; ui.detail = null; app.classList.remove('tabin'); void app.offsetWidth; app.classList.add('tabin'); render(); window.scrollTo(0, 0); } break;
       case 'close': closeSheet(); break;
       case 'pickday': ui.planDay = el.dataset.k; ui.plan = null; render(); break;
       case 'start': E.startWorkout(ensurePlan()); ui.plan = null; ui.planDay = null; keepAwake(); render(); window.scrollTo(0, 0); break;
