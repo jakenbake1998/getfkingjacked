@@ -20,10 +20,22 @@
   const thumbs = {};
   try { Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v5') || '{}')); } catch (e) {}
 
+  // The real 3D Jake (models/jake.glb, rigged), loaded only when that figure style is on. J3 = false if it failed.
+  let J3 = null, j3loading = null;
+  function loadJake3D() {
+    if (J3 !== null) return Promise.resolve(J3);
+    if (!j3loading) {
+      j3loading = Promise.all([import('./vendor/GLTFLoader.js'), import('./vendor/SkeletonUtils.js')])
+        .then(([G, SU]) => new Promise((res, rej) => new G.GLTFLoader().load('models/jake.glb?v=1', (g) => res(g), undefined, rej)).then((g) => (J3 = prepJ3(g, SU))))
+        .catch(() => (J3 = false));
+    }
+    return j3loading;
+  }
   function load() {
-    if (T) return Promise.resolve(T);
+    const want3d = () => (figStyle() === 'jake3d' && J3 === null ? loadJake3D().then(() => T) : T);
+    if (T) return Promise.resolve(want3d());
     if (!loading) loading = import('./vendor/three.module.min.js').then((m) => (T = m)).catch((e) => { failed = true; throw e; });
-    return loading;
+    return loading.then(want3d);
   }
 
   // ---------- body part shapes: radius along the bone, t = 0 at the near joint ----------
@@ -238,7 +250,85 @@
   // Figure style: 'classic' grey mannequin or 'jake' (the intro character: tank, shorts, mustache, cel-shaded)
   function figStyle() {
     try { const v = localStorage.getItem('gfj.figstyle'); if (v) return v; } catch (e) {}
-    return window.Engine && Engine.S && Engine.S.profile && Engine.S.profile.name === 'Jake' ? 'jake' : 'classic';
+    return window.Engine && Engine.S && Engine.S.profile && Engine.S.profile.name === 'Jake' ? 'jake3d' : 'classic';
+  }
+
+  // ---------- the real 3D Jake: a skinned model whose bones follow the solved joints ----------
+  // Muscle regions painted onto the model, by the bone that moves each vertex and where it sits on the body (bind pose, metres)
+  const REG = ['', 'chest', 'abs', 'obliques', 'lats', 'lowerback', 'traps', 'delts', 'biceps', 'triceps', 'forearms', 'glutes', 'quads', 'hams', 'calves'];
+  const RI = {}; REG.forEach((r, i) => (RI[r] = i));
+  const J3_G = 95, J3_GH = 88; // model metres -> figure units (body, head)
+  function prepJ3(g, SU) {
+    const root = g.scene; root.updateMatrixWorld(true);
+    let sm = null; root.traverse((o) => { if (o.isSkinnedMesh && !sm) sm = o; });
+    if (!sm) return false;
+    const sk = sm.skeleton, bw = {}, q = {};
+    sk.bones.forEach((b, i) => { const m = sk.boneInverses[i].clone().invert(); bw[b.name] = m; q[b.name] = new T.Vector3().setFromMatrixPosition(m); });
+    for (const n of ['Hips', 'Spine', 'neck', 'Head', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm', 'LeftHand', 'RightHand', 'LeftUpLeg', 'RightUpLeg', 'LeftLeg', 'RightLeg', 'LeftFoot', 'RightFoot']) if (!q[n]) return false;
+    const Z = new T.Vector3(0, 0, 1);
+    const frame = (front, dir) => { const y = dir.clone().normalize(); const x = front.clone().addScaledVector(y, -front.dot(y)); if (x.lengthSq() < 1e-6) x.set(1, 0, 0); x.normalize(); return new T.Matrix4().makeBasis(x, y, new T.Vector3().crossVectors(x, y)); };
+    const fb = {}, len = {};
+    [['Arm', 'ForeArm'], ['ForeArm', 'Hand'], ['UpLeg', 'Leg'], ['Leg', 'Foot']].forEach(([a, c]) => ['Left', 'Right'].forEach((S) => { const d = q[S + c].clone().sub(q[S + a]); len[S + a] = d.length(); fb[S + a] = frame(Z, d); }));
+    fb.up = frame(Z, new T.Vector3(0, 1, 0));
+    const geo = sm.geometry, pos = geo.attributes.position, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+    const n = pos.count, region = new Uint8Array(n), v = new T.Vector3();
+    let soleY = 1e9;
+    const armX = Math.abs(q.LeftArm.x), legZ = (q.LeftUpLeg.z + q.RightUpLeg.z) / 2;
+    for (let i = 0; i < n; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(sm.bindMatrix);
+      soleY = Math.min(soleY, v.y);
+      let best = 0, bi = 0; for (let k = 0; k < 4; k++) { const w = sw.getComponent(i, k); if (w > best) { best = w; bi = si.getComponent(i, k); } }
+      const nm = sk.bones[bi] ? sk.bones[bi].name : '', ax = Math.abs(v.x), front = v.z > -0.01;
+      let r = '';
+      if (/Hand/.test(nm) || /Foot|Toe/.test(nm)) r = '';
+      else if (/ForeArm/.test(nm)) r = 'forearms';
+      else if (/Arm$/.test(nm)) r = ax - armX < 0.08 ? 'delts' : v.z > -0.03 ? 'biceps' : 'triceps';
+      else if (/Shoulder/.test(nm)) r = v.z < -0.02 ? 'traps' : ax > 0.15 ? 'delts' : 'chest';
+      else if (/neck|Head/.test(nm)) r = v.z < 0 && v.y < 1.5 ? 'traps' : '';
+      else if (/UpLeg/.test(nm)) r = v.z < legZ ? (v.y > 0.74 ? 'glutes' : 'hams') : 'quads';
+      else if (/Leg/.test(nm)) r = v.z < legZ - 0.01 ? 'calves' : '';
+      else { // torso
+        if (front) r = ax > 0.17 && v.y > 1.3 ? 'delts' : v.y > 1.2 ? 'chest' : ax > 0.12 && v.y > 0.95 ? 'obliques' : v.y > 0.92 ? 'abs' : '';
+        else r = v.y > 1.33 ? 'traps' : v.y > 1.08 ? 'lats' : v.y > 0.97 ? 'lowerback' : v.y > 0.76 ? 'glutes' : '';
+      }
+      region[i] = RI[r] || 0;
+    }
+    return { scene: root, SU, bw, q, fb, len, region, soleY, frame };
+  }
+  // Pose the model's bones from the solved joints J/F (svg-style coords). Each bone gets a world matrix that maps its
+  // bind-pose slice of the body onto the figure: rotated to the limb, stretched along it to the limb's length.
+  function poseJ3(s, J, F) {
+    const { q, bw, fb, len, frame } = J3, bones = s.j3.bones;
+    const V = (a) => new T.Vector3(a.x, -a.y, a.z);
+    const xform = (p, Ft, Fb, gx, gy, piv) => new T.Matrix4().makeTranslation(p.x, p.y, p.z).multiply(Ft).multiply(new T.Matrix4().makeScale(gx, gy, gx)).multiply(Fb.clone().transpose()).multiply(new T.Matrix4().makeTranslation(-piv.x, -piv.y, -piv.z));
+    const set = (names, M) => names.forEach((nm) => { const b = bones[nm]; if (b) b.matrixWorld.multiplyMatrices(M, bw[nm]); });
+    const g = J3_G;
+    // torso: the model's hip-joint line sits on J.hip, the shoulder joints on the figure's shoulders
+    const qP = q.LeftUpLeg.clone().add(q.RightUpLeg).multiplyScalar(0.5);
+    const kT = (L.torso - 5) / (q.LeftArm.y - qP.y);
+    const Mt = xform(V(J.hip), frame(V(F.torso), V(sub(J.sho, J.hip))), fb.up, g, kT, qP);
+    set(['Hips', 'Spine02', 'Spine01', 'Spine', 'LeftShoulder', 'RightShoulder'], Mt);
+    const Mh = xform(q.neck.clone().applyMatrix4(Mt), frame(V(F.head), V(sub(J.head, J.neck))), fb.up, J3_GH, J3_GH, q.neck);
+    set(['neck', 'Head', 'head_end', 'headfront'], Mh);
+    const HS = 1.65, gy = (s.P.grip === 'open' ? 3.4 : 4.9) * HS;
+    const footH = (q.LeftFoot.y - J3.soleY) * g - PAD.ankle0;
+    for (let i = 0; i < 2; i++) {
+      const S = i ? 'Left' : 'Right'; // figure side 0 is +z, the body's right
+      const sho = J['sho' + i], elb = J['elb' + i], hand = J['hand' + i];
+      const fd = nrm(sub(hand, elb)), wristApp = add(hand, fd, -gy);
+      set([S + 'Arm'], xform(V(sho), frame(V(F['ua' + i]), V(sub(elb, sho))), fb[S + 'Arm'], g, len3(sub(elb, sho)) / len[S + 'Arm'], q[S + 'Arm']));
+      // forearm ends at the wrist of the fingered hand (stretched along its length only, so it keeps its thickness)
+      const kF = Math.max(0.3 * g, len3(sub(wristApp, elb)) / len[S + 'ForeArm']);
+      const Ffa = frame(V(F['fa' + i]), V(fd));
+      set([S + 'ForeArm'], xform(V(elb), Ffa, fb[S + 'ForeArm'], g, kF, q[S + 'ForeArm']));
+      set([S + 'Hand'], xform(V(wristApp), Ffa, fb[S + 'ForeArm'], 0.02, 0.02, q[S + 'Hand'])); // the model's flat hand folds away; the fingered hand shows
+      const hj = J['hipj' + i], knee = J['knee' + i], ank = J['ankle' + i];
+      set([S + 'UpLeg'], xform(V(hj), frame(V(F['th' + i]), V(sub(knee, hj))), fb[S + 'UpLeg'], g, len3(sub(knee, hj)) / len[S + 'UpLeg'], q[S + 'UpLeg']));
+      const ankT = add(ank, nrm(sub(knee, ank)), footH); // the shoe's sole lands where the figure's foot is
+      const Fsh = frame(V(F['sh' + i]), V(sub(ankT, knee)));
+      set([S + 'Leg'], xform(V(knee), Fsh, fb[S + 'Leg'], g, len3(sub(ankT, knee)) / len[S + 'Leg'], q[S + 'Leg']));
+      set([S + 'Foot', S + 'ToeBase'], xform(V(ankT), Fsh, fb[S + 'Leg'], g, g, q[S + 'Foot']));
+    }
   }
   const JAKE = { skin: 0xd59a6f, tank: 0x16a184, shorts: 0x15171b, shoe: 0xf1f1ee, hair: 0x22160f, sock: 0xe8e8e4 };
   const honestOn = () => { try { return localStorage.getItem('gfj.honest') === '1'; } catch (e) { return false; } };
@@ -335,7 +425,8 @@
     const def = getDef(id);
     const tg = targetsFor(id, def);
     const scene = new T.Scene();
-    const jake = style === 'jake';
+    const j3 = style === 'jake3d' && !!J3; // falls back to the drawn Jake if the model didn't load
+    const jake = style === 'jake' || style === 'jake3d';
     const mat = withGlow(jake ? new T.MeshToonMaterial({ vertexColors: true, gradientMap: rampTex() }) : new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.36, metalness: 0.08 }), jake ? 0.55 : 0.75);
     const dark = new T.MeshStandardMaterial({ color: 0x2b3138, roughness: 0.55, metalness: 0.3 });
     const pad = new T.MeshStandardMaterial({ color: 0x23282e, roughness: 0.7, metalness: 0.1 });
@@ -373,15 +464,35 @@
     };
     { // hands with fingers, closed around whatever is held
       const grip = gripFor(id, def);
-      const hm = jake ? new T.MeshToonMaterial({ color: JAKE.skin, gradientMap: rampTex() }) : new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
+      const hm = j3 ? new T.MeshStandardMaterial({ color: 0xc4845e, roughness: 0.8 }) : jake ? new T.MeshToonMaterial({ color: JAKE.skin, gradientMap: rampTex() }) : new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
       const closed = grip !== 'open';
       const hands = [makeHand(hm, closed), makeHand(hm, closed)];
       const HS = 1.65; // real-hand size against the forearm
       hands[0].scale.set(HS, HS, HS); hands[1].scale.set(HS, HS, -HS); // mirror for the other hand
-      hands.forEach((hg) => { rig.add(hg); if (jake) { const ms = []; hg.traverse((o) => { if (o.isMesh) ms.push(o); }); ms.forEach((o) => o.add(new T.Mesh(o.geometry, ink()))); } });
+      hands.forEach((hg) => { rig.add(hg); if (jake && !j3) { const ms = []; hg.traverse((o) => { if (o.isMesh) ms.push(o); }); ms.forEach((o) => o.add(new T.Mesh(o.geometry, ink()))); } });
       P.hand = hands; P.grip = grip;
     }
-    if (jake) { // face: eyes, brows, nose, the mustache
+    let j3s = null;
+    if (j3) { // the real model: a skinned copy for this scene, with the worked muscles painted in as glow
+      const root = J3.SU.clone(J3.scene); scene.add(root); root.updateMatrixWorld(true);
+      let sm = null; root.traverse((o) => { if (o.isSkinnedMesh && !sm) sm = o; });
+      sm.frustumCulled = false;
+      const geo = sm.geometry.clone(), n = geo.attributes.position.count, gl = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { const lv = tg[REG[J3.region[i]]]; const c = lv === 1 ? GLOW_R : lv === 2 ? GLOW_O : null; if (c) { gl[i * 3] = c[0]; gl[i * 3 + 1] = c[1]; gl[i * 3 + 2] = c[2]; } }
+      geo.setAttribute('glowc', new T.BufferAttribute(gl, 3)); sm.geometry = geo;
+      const mm = new T.MeshStandardMaterial({ map: sm.material.map, roughness: 0.85, metalness: 0 });
+      mm.onBeforeCompile = (sh) => { // worked muscles: the texture is tinted red/orange, with a little glow on top
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 glowc;\nvarying vec3 vGlow;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glowc;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vGlow;')
+          .replace('#include <map_fragment>', '#include <map_fragment>\n  { float lum = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15)); diffuseColor.rgb = mix(diffuseColor.rgb, vGlow * (0.3 + 1.1 * lum), 0.72 * vGlow.r); }')
+          .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += vGlow * 0.12;');
+      };
+      sm.material = mm;
+      const bones = {}; sm.skeleton.bones.forEach((b) => { b.matrixWorldAutoUpdate = false; bones[b.name] = b; });
+      j3s = { root, sm, bones };
+      Object.keys(P).forEach((k) => { if (k !== 'hand' && k !== 'grip') [].concat(P[k]).forEach((o) => { o.visible = false; }); });
+    }
+    if (jake && !j3) { // face: eyes, brows, nose, the mustache
       const fm = new T.MeshToonMaterial({ color: JAKE.hair, gradientMap: rampTex() });
       const nm = withGlow(new T.MeshToonMaterial({ color: JAKE.skin, gradientMap: rampTex() }), 0);
       const sg = (r) => new T.SphereGeometry(r, 12, 10);
@@ -478,7 +589,7 @@
     y1 = Math.max(y1, FLOOR + 4);
     shadow.scale.set(Math.max(60, x1 - x0) * 0.9, 48, 1); shadow.position.set((x0 + x1) / 2, -FLOOR + 0.2, 0);
     const autoView = [x0, y0, x1 - x0, y1 - y0];
-    const s = { id, key: skey, style, def, scene, P, props, honest, view: def.view || autoView, mini: def.mini || autoView };
+    const s = { id, key: skey, style, def, scene, P, props, honest, j3: j3s, view: def.view || autoView, mini: def.mini || autoView };
     scenes[skey] = s;
     return s;
   }
@@ -602,6 +713,7 @@
       const hang = add(add(A2, v3(0, 1, 0), 3.2), F.torso, -0.5);
       H.b0.position.copy(W3(add(hang, side, 2.4))); H.b1.position.copy(W3(add(hang, side, -2.4)));
     }
+    if (s.j3) poseJ3(s, J, F);
     if (props.mid) props.mid.position.copy(W3(add(J.mid, nrm(sub(J.hand0, J.elb0)), def.hold === 'wheel' ? 4 : 0)));
     if (props.back) props.back.position.copy(W3(add(add(J.sho, nrm(sub(J.sho, J.hip)), 2), F.torso, -9)));
     if (props.hipbar) props.hipbar.position.copy(W3(add(J.hip, F.torso, 13)));
