@@ -222,6 +222,7 @@
     return { J, F, heel: p.heel || 0 };
   }
 
+  const honestOn = () => { try { return localStorage.getItem('gfj.honest') === '1'; } catch (e) { return false; } };
   // ---------- one scene per exercise ----------
   const scenes = {};
   function tint(lvl) { return lvl === 1 ? RED : lvl === 2 ? ORANGE : null; }
@@ -268,6 +269,15 @@
       delt: [M(G.delt), M(G.delt)], elbow: [M(G.elbow), M(G.elbow)], knee: [M(G.knee), M(G.knee)], hand: [M(G.hand), M(G.hand)], thumb: [M(G.thumb), M(G.thumb)],
       foot: [M(G.foot), M(G.foot)], hipj: [M(G.hipj), M(G.hipj)], ankle: [M(G.ankle), M(G.ankle)],
     };
+    // ---- hidden "honest" mode: a small dangling part on a spring (hero view only) ----
+    let honest = null;
+    if (honestOn()) {
+      const skin = new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
+      const shaft = new T.Mesh(new T.CapsuleGeometry(1.9, 6.2, 6, 14).translate(0, 4.6, 0), skin);
+      const b0 = new T.Mesh(new T.SphereGeometry(2.3, 16, 12), skin), b1 = new T.Mesh(new T.SphereGeometry(2.3, 16, 12), skin);
+      rig.add(shaft); rig.add(b0); rig.add(b1);
+      honest = { shaft, b0, b1, tip: null, v: { x: 0, y: 0, z: 0 } };
+    }
     // ---- equipment ----
     const props = { hold: [], extents: [] };
     const box = (w, h, d, x, y, z, m) => { const o = new T.Mesh(new T.BoxGeometry(w, h, d), m || dark); o.position.set(x, -y, z || 0); scene.add(o); props.extents.push([x - w / 2, y - h / 2], [x + w / 2, y + h / 2]); return o; };
@@ -343,7 +353,7 @@
     y1 = Math.max(y1, FLOOR + 4);
     shadow.scale.set(Math.max(60, x1 - x0) * 0.9, 48, 1); shadow.position.set((x0 + x1) / 2, -FLOOR + 0.2, 0);
     const autoView = [x0, y0, x1 - x0, y1 - y0];
-    const s = { id, def, scene, P, props, view: def.view || autoView, mini: def.mini || autoView };
+    const s = { id, def, scene, P, props, honest, view: def.view || autoView, mini: def.mini || autoView };
     scenes[id] = s;
     return s;
   }
@@ -402,6 +412,25 @@
         if (def.hold === 'kb' || def.hold === 'kb1') g.quaternion.identity(); else g.rotation.set(0, 0, Math.atan2(-fd.y, fd.x));
       }
       if (props.rope) props.rope[i].position.copy(W3(add(hand, v3(0, 6, i ? -1.5 : 1.5))));
+    }
+    if (s.honest) {
+      const H = s.honest, L2 = 10.5, dt = 1 / 60;
+      const A = add(add(add(J.hip, F.torso, 9.5), tdir, -7.5), v3(0, 0, 0));
+      if (!H.tip || s.still) { H.tip = add(A, nrm(add(v3(0, 1, 0), F.torso, 0.25)), L2); H.v = v3(0, 0, 0); }
+      else {
+        H.v = add(H.v, v3(0, 981 * dt, 0));
+        // keep it off the thighs/body: push gently forward
+        H.v = add(H.v, F.torso, 120 * dt);
+        let tip = add(H.tip, H.v, dt);
+        const d = sub(tip, A), l = len3(d) || 1;
+        tip = add(A, d, L2 / l); // rope constraint
+        H.v = v3((tip.x - H.tip.x) / dt * 0.9, (tip.y - H.tip.y) / dt * 0.9, (tip.z - H.tip.z) / dt * 0.9);
+        H.tip = tip;
+      }
+      place(H.shaft, A, H.tip, F.torso, 1);
+      const side = nrm(cross(nrm(sub(H.tip, A)), F.torso));
+      const hang = add(A, nrm(add(sub(H.tip, A), v3(0, 6, 0))), 2.6);
+      H.b0.position.copy(W3(add(hang, side, 1.9))); H.b1.position.copy(W3(add(hang, side, -1.9)));
     }
     if (props.mid) props.mid.position.copy(W3(add(J.mid, nrm(sub(J.hand0, J.elb0)), def.hold === 'wheel' ? 6 : def.hold === 'kbmid' ? 1 : 2.5)));
     if (props.back) props.back.position.copy(W3(add(add(J.sho, nrm(sub(J.sho, J.hip)), 2), F.torso, -9)));
@@ -503,7 +532,9 @@
     thumbR.setPixelRatio(1); thumbR.setSize(size, size, false);
     const s = build(id);
     frameCam(thumbCam, size > 200 ? s.view : s.mini, 1, s.def.cam);
+    if (s.honest) [s.honest.shaft, s.honest.b0, s.honest.b1].forEach((m) => (m.visible = false));
     pose(s, k == null ? 1 : k);
+    if (s.honest) [s.honest.shaft, s.honest.b0, s.honest.b1].forEach((m) => (m.visible = true));
     thumbR.render(s.scene, thumbCam);
     return thumbR.domElement.toDataURL('image/jpeg', 0.82);
   }
@@ -531,5 +562,6 @@
     mount,
     warm() {},
     snap: (id, k, size) => load().then(() => snap(id, k, size || 300)), // debugging / previews
+    setHonest(on) { try { localStorage.setItem('gfj.honest', on ? '1' : '0'); } catch (e) {} Object.keys(scenes).forEach((id) => { if (!hero || hero.id !== id) dispose(id); }); if (hero && hero.id) { const id = hero.id; dispose(id); hero.id = null; hero.el = null; } },
   };
 })();

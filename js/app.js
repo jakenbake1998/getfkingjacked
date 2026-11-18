@@ -863,7 +863,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv,text/plain" hidden>
-      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.3</div>`;
+      <div class="sub ver-tap" data-act="ver" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.4</div>`;
   }
 
 
@@ -924,6 +924,11 @@
       }
       case 'sujake': if (confirm('Load Jake’s gym setup, sore elbows and knees, and his Fitbod history on this phone?')) { E.setup('jake'); ui.setup = null; render(); } break;
 
+      case 'ver': { // hidden: tap the version 5 times quickly
+        const now = Date.now(); ui.verTaps = (ui.verTaps || []).filter((t) => now - t < 3000).concat(now);
+        if (ui.verTaps.length >= 5) { ui.verTaps = []; const on = localStorage.getItem('gfj.honest') !== '1'; if (window.Figure3D && Figure3D.setHonest) Figure3D.setHonest(on); else localStorage.setItem('gfj.honest', on ? '1' : '0'); toast(on ? 'Anatomically honest mode: on' : 'Anatomically honest mode: off'); }
+        break;
+      }
       case 'plandraft': { const k = el.dataset.k, v = el.dataset.v; ui.planDraft = ui.planDraft || {}; ui.planDraft[k] = isNaN(+v) ? v : +v; render(); break; }
       case 'planundo': ui.planDraft = null; render(); break;
       case 'plansave': {
