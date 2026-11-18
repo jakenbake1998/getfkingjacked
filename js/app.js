@@ -51,6 +51,8 @@
   const mmss = (s) => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
   const todayKey = () => { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
   const GRIP = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+  const XICON = '<svg class="xic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
+  const BACKICON = '<svg class="xic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg>';
   const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   const info = (id) => (window.EXINFO && EXINFO[id]) || { m: [], s: [], steps: [], img: 0 };
   const imgSrc = (id, k) => 'img/ex/' + id + '-' + (k || 0) + '.jpg';
@@ -185,7 +187,7 @@
       <div class="top"><div>
         <div class="kicker">${nm ? esc(nm) + ', ' : ''}${fmtDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })}</div>
         <h1>${esc(day.name)}</h1>
-      </div></div>
+      </div><button class="lib-btn" data-act="openlib" aria-label="All exercises"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Exercises</span></button></div>
       <div class="sub">Block ${plan.block + 1}, week ${plan.week + 1} of 4. About ${plan.estMin} min, ${plan.items.length} exercises${day.circuit ? ', done as a circuit' : ''}.</div>
       ${blockBar(plan.week)}
       ${avoidNote(plan.day)}
@@ -200,7 +202,6 @@
       <button class="ex-open" data-act="detail" data-i="${i}">${thumb(it.ex)}
         <span class="ex-main"><span class="ex-name">${esc(ex.name)}</span>
         <span class="ex-meta">${setLine(ex, it)}${it.first ? ' <span class="first">New lift: start light</span>' : ''}${it.maxed ? ' <span class="first">Ready for heavier weights</span>' : ''}</span></span></button>
-      <span class="drag" data-drag="${i}" aria-label="Drag to reorder" role="button">${GRIP}</span>
       <button class="ex-more" data-act="exmenu" data-i="${i}" aria-label="Options for ${esc(ex.name)}">⋯</button>
     </div></div>`;
   }
@@ -214,7 +215,7 @@
       <div class="top"><div>
         <div class="kicker">${E.schemeFor(c.week).name} week</div>
         <h1>${esc(day.name)}</h1>
-      </div><div class="elapsed" id="elapsed">${mmss((Date.now() - new Date(c.startedAt)) / 1000)}</div></div>
+      </div><div class="top-r"><button class="lib-btn" data-act="openlib" aria-label="All exercises"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Exercises</span></button><div class="elapsed" id="elapsed">${mmss((Date.now() - new Date(c.startedAt)) / 1000)}</div></div></div>
       ${c.items.map((it, i) => sessionCard(it, i)).join('')}
       <button class="btn-quiet" data-act="addex">Add an exercise</button>
       <button class="${allDone ? 'btn-main' : 'btn-quiet'}" data-act="finish">Finish workout</button>
@@ -243,7 +244,6 @@
         <button class="ex-open" data-act="detail" data-i="${i}">${thumb(it.ex)}
           <span class="ex-main"><span class="ex-name">${esc(ex.name)}</span>
           <span class="ex-meta">${done ? '<span class="donechip">Done</span> ' : ''}${nDone} of ${it.sets.length} sets, ${mmss(it.rest)} rest</span></span></button>
-        <span class="drag" data-drag="${i}" aria-label="Drag to reorder" role="button">${GRIP}</span>
         <button class="ex-more" data-act="exmenu" data-i="${i}" aria-label="Options for ${esc(ex.name)}">⋯</button>
       </div>
       ${!done || it.open ? setRows(it, i, true) : ''}
@@ -255,6 +255,26 @@
   function openDetail(i, view) {
     ui.detail = { i, view: view || 'main', tab: 0, q: '' };
     renderDetail();
+  }
+  function openLibrary() { ui.detail = { library: true, view: 'library', q: '', g: 'All' }; renderDetail(); }
+  function libExercises() { return EXERCISES.concat(Object.values(E.S.custom || {})); }
+  function renderLibrary(d) {
+    const all = libExercises();
+    const groups = ['All'].concat([...new Set(all.map((e) => e.group))]);
+    const q = (d.q || '').toLowerCase();
+    const list = all.filter((e) => (d.g === 'All' || e.group === d.g) && (!q || e.name.toLowerCase().includes(q) || e.group.toLowerCase().includes(q) || muscleLine(e.id).toLowerCase().includes(q)))
+      .sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name));
+    const row = (e) => {
+      const ses = E.sessionsFor(e.id);
+      const last = ses[ses.length - 1];
+      const ok = E.allowed(e);
+      const lastTxt = last ? 'Last: ' + (e.unit === 'lb' ? fmtW(Math.max(...last.sets.map((x) => x.w))) + ' lb × ' + Math.max(...last.sets.map((x) => x.r)) : Math.max(...last.sets.map((x) => x.r)) + (e.unit === 'sec' ? ' sec' : ' reps')) + ', ' + fmtDate(last.date, { month: 'short', day: 'numeric' }) : 'Not done yet';
+      return `<button class="rep-row lib-row" data-act="libopen" data-ex="${e.id}" data-key="lib-${e.id}">${thumb(e.id)}<span><b>${esc(e.name)}</b><small>${esc(muscleLine(e.id))}</small><small class="${last ? '' : 'dim'}">${lastTxt}</small></span>${ok ? '' : '<em class="lib-warn">Skipped for your joints</em>'}</button>`;
+    };
+    return `<div class="dv-bar"><button class="dv-x" data-act="dclose" aria-label="Close">${XICON}</button><span>Exercises</span><span style="width:40px"></span></div>
+      <div class="dpad"><input class="text-in" id="lib-q" placeholder="Search ${all.length} exercises" value="${esc(d.q || '')}" autocomplete="off">
+      <div class="chips lib-chips">${groups.map((g) => `<button class="chip ${d.g === g ? 'on' : ''}" data-act="libg" data-k="${esc(g)}">${esc(g)}</button>`).join('')}</div>
+      ${list.length ? list.map(row).join('') : '<div class="empty">No exercises match.</div>'}</div>`;
   }
   function hideDetail() {
     document.body.classList.remove('noscroll');
@@ -290,35 +310,50 @@
     return `<div class="coach"><div class="coach-t">Week ${plan.week + 1} of 4: ${sch.name}</div><div class="coach-b">${tips[sch.name]}</div>
       ${last ? `<div class="trend">${ex.unit !== 'sec' ? `<span>Reps <b class="t ${reps === '↑' ? 'up' : ''}">${reps}</b></span>` : ''}${ex.unit === 'lb' ? `<span>Weight <b class="t ${weight === '↑' ? 'up' : ''}">${weight}</b></span>` : ''}<span class="sub">vs last time</span></div>` : `<div class="trend"><span class="sub">First time. Pick a weight that feels easy and learn the move.</span></div>`}</div>`;
   }
+  function libSummary(id) {
+    const ex = E.exInfo(id), ses = E.sessionsFor(id), ok = E.allowed(ex);
+    const last = ses[ses.length - 1];
+    return `<div class="coach">${ok ? '' : '<div class="coach-t" style="color:var(--hurt)">Skipped right now to protect a sore joint</div>'}
+      <div class="coach-b">${last ? `Done ${ses.length} time${ses.length > 1 ? 's' : ''}. Last on ${fmtDate(last.date, { month: 'short', day: 'numeric' })}: ${last.sets.map((x) => (ex.unit === 'lb' ? fmtW(x.w) + '×' + x.r : x.r + (ex.unit === 'sec' ? 's' : ''))).join(', ')}` : 'You haven’t done this one yet.'}</div>
+      ${ex.unit === 'lb' && last ? `<div class="trend"><span class="sub">Best est. 1-rep max: ${Math.round(Math.max(...ses.map((x) => E.bestE1rm(x.sets))))} lb</span></div>` : ''}</div>`;
+  }
   function renderDetail() {
     clearInterval(flipTimer);
     const d = ui.detail;
     if (!d || !E.S) { hideDetail(); return; }
     const plan = curPlan();
-    const it = plan.items[d.i];
+    if (d.view === 'library') {
+      document.body.classList.add('noscroll');
+      const prevL = $('#detail .detail');
+      if (prevL && prevL.classList.contains('closing')) detailEl.textContent = '';
+      detailEl.innerHTML = `<div class="detail" role="dialog" aria-modal="true" aria-label="Exercises"><div class="dv-body v-main" data-key="v-library">${renderLibrary(d)}</div></div>`;
+      return;
+    }
+    const lib = d.lib || null;
+    const it = lib ? { ex: lib, sets: [], rest: E.S.rest[lib] || 90 } : plan.items[d.i];
     if (!it) { ui.detail = null; hideDetail(); return; }
     document.body.classList.add('noscroll');
     const ex = E.exInfo(it.ex);
     const inf = info(it.ex);
     let body = '';
-    const head = (title) => `<div class="dv-bar"><button class="dv-back" data-act="dview" data-v="main" aria-label="Back">‹</button><span>${title}</span><span style="width:40px"></span></div>`;
+    const head = (title) => `<div class="dv-bar"><button class="dv-x" data-act="dview" data-v="main" aria-label="Back">${BACKICON}</button><span>${title}</span><span style="width:40px"></span></div>`;
     if (d.view === 'main') {
       const fig = window.Figure3D && Figure3D.has(it.ex) && !Figure3D.failed;
       body = `<div class="hero ${fig ? 'figbg' : ''}">${fig ? `<div class="hero-fig" data-keep data-fig="${it.ex}" data-key="fig-${it.ex}"></div>` : inf.img ? `<img id="hero-img" src="${imgSrc(it.ex, 0)}" alt="${esc(ex.name)}">` : `<div class="hero-none">${muscleMap(inf.m.length ? inf.m : [ex.group.toLowerCase()], inf.s)}</div>`}
-          <button class="dv-close" data-act="dclose" aria-label="Close">✕</button>
+          <button class="dv-close" data-act="${lib ? 'libback' : 'dclose'}" aria-label="${lib ? 'Back to exercises' : 'Close'}">${lib ? BACKICON : XICON}</button>
           <div class="hero-foot"><h2 class="hero-name">${esc(ex.name)}</h2><button class="howto-btn" data-act="dview" data-v="howto">▶ How-to</button></div></div>
         <div class="dchips">
-          <button class="dchip" data-act="restpick">⏱ ${mmss(it.rest)} rest</button>
+          ${lib ? '' : `<button class="dchip" data-act="restpick">⏱ ${mmss(it.rest)} rest</button>`}
           <button class="dchip" data-act="dview" data-v="history">History</button>
-          <button class="dchip" data-act="dview" data-v="replace">Replace</button>
-          <button class="dchip" data-act="dview" data-v="more">More</button>
+          ${lib ? '' : `<button class="dchip" data-act="dview" data-v="replace">Replace</button>
+          <button class="dchip" data-act="dview" data-v="more">More</button>`}
         </div>
         <div class="dpad">
           <div class="muscle-line">${esc(muscleLine(it.ex))}</div>
-          ${coachLine(it)}
+          ${lib ? libSummary(it.ex) : coachLine(it)}
           ${E.S.notes[it.ex] ? `<div class="note-show">Your note: ${esc(E.S.notes[it.ex])}</div>` : ''}
-          ${setRows(it, d.i, !!E.S.current)}
-          ${E.S.current ? '' : '<div class="sub" style="margin-top:8px">Start the workout to check off sets.</div>'}
+          ${lib ? '' : setRows(it, d.i, !!E.S.current)}
+          ${lib || E.S.current ? '' : '<div class="sub" style="margin-top:8px">Start the workout to check off sets.</div>'}
         </div>`;
     } else if (d.view === 'howto') {
       const tabs = ['Instructions', 'Target', 'Equipment'];
@@ -346,14 +381,14 @@
           return `<div class="hist"><h3>${fmtDate(s.date, { weekday: 'short', month: 'short', day: 'numeric' })}</h3>${badge ? `<span class="badge">${badge}</span>` : ''}
             ${s.sets.map((x, n) => `<div class="hset"><span class="hn">${n + 1}</span>${x.r}${ex.unit === 'sec' ? ' sec' : ' reps'}${ex.unit === 'lb' ? ' × ' + fmtW(x.w) + ' lb' : ''}</div>`).join('')}
             ${ex.unit === 'lb' ? `<div class="sub">Est. 1-rep max ${Math.round(E.bestE1rm(s.sets))} lb</div>` : ''}</div>`;
-        }).join('') : `${ex.unit === 'lb' ? `<div class="card"><div class="sub">Est. 1-rep max</div><div class="big-num" style="font-size:52px">${Math.round(series[series.length - 1].v)}<small>lb</small></div>${series.length > 1 ? lineChart(series, { h: 150 }) : '<div class="empty">Log it again to start the chart.</div>'}</div>` : ''}
-          <div class="card"><div class="sub">${ex.unit === 'lb' ? 'Top weight' : ex.unit === 'sec' ? 'Longest round' : 'Best set'}</div><div class="big-num" style="font-size:52px">${fmtW(wSeries[wSeries.length - 1].v)}<small>${ex.unit === 'lb' ? 'lb' : ex.unit === 'sec' ? 'sec' : 'reps'}</small></div>${wSeries.length > 1 ? lineChart(wSeries, { h: 150 }) : ''}</div>`}
+        }).join('') : `${ex.unit === 'lb' ? `<div class="card"><div class="sub">Est. 1-rep max</div><div class="big-num" style="font-size:52px">${Math.round(series[series.length - 1].v)}<small>lb</small></div>${series.length > 1 ? lineChart(series, { h: 150, unit: 'lb' }) : '<div class="empty">Log it again to start the chart.</div>'}</div>` : ''}
+          <div class="card"><div class="sub">${ex.unit === 'lb' ? 'Top weight' : ex.unit === 'sec' ? 'Longest round' : 'Best set'}</div><div class="big-num" style="font-size:52px">${fmtW(wSeries[wSeries.length - 1].v)}<small>${ex.unit === 'lb' ? 'lb' : ex.unit === 'sec' ? 'sec' : 'reps'}</small></div>${wSeries.length > 1 ? lineChart(wSeries, { h: 150, unit: ex.unit === 'lb' ? 'lb' : ex.unit === 'sec' ? 'sec' : 'reps' }) : ''}</div>`}
         </div>`;
     } else if (d.view === 'replace') {
       const opts = E.swapOptions(plan, d.i);
       const q = (d.q || '').toLowerCase();
-      const all = q ? EXERCISES.filter((e) => E.allowed(e) && e.id !== it.ex && (e.name.toLowerCase().includes(q) || e.group.toLowerCase().includes(q))) : opts;
-      body = `<div class="dv-bar"><span style="width:40px"></span><span>Replace ${esc(ex.name)}</span><button class="dv-back" data-act="dview" data-v="main" aria-label="Close">✕</button></div>
+      const all = q ? EXERCISES.filter((e) => E.allowed(e) && !plan.items.some((x) => x.ex === e.id) && (e.name.toLowerCase().includes(q) || e.group.toLowerCase().includes(q))) : opts;
+      body = `<div class="dv-bar"><button class="dv-x" data-act="dview" data-v="main" aria-label="Close">${XICON}</button><span>Replace ${esc(ex.name)}</span><span style="width:40px"></span></div>
         <div class="dpad"><input class="text-in" id="rep-q" placeholder="Search" value="${esc(d.q || '')}" autocomplete="off">
         <div class="rep-cur">${thumb(it.ex)}<span><b>${esc(ex.name)}</b><small>${esc(muscleLine(it.ex))}</small></span></div>
         <div class="lbl">${q ? 'Results' : 'Replace with'}</div>
@@ -370,7 +405,7 @@
     }
     const prev = $('#detail .detail');
     if (prev && prev.classList.contains('closing')) detailEl.textContent = '';
-    detailEl.innerHTML = `<div class="detail" role="dialog" aria-modal="true" aria-label="${esc(ex.name)}"><div class="dv-body ${d.view === 'main' ? 'v-main' : 'v-sub'}" data-key="v-${d.view}-${d.i}">${body}</div></div>`;
+    detailEl.innerHTML = `<div class="detail" role="dialog" aria-modal="true" aria-label="${esc(ex.name)}"><div class="dv-body ${d.view === 'main' ? 'v-main' : 'v-sub'}" data-key="v-${d.view}-${lib || d.i}">${body}</div></div>`;
     document.querySelectorAll('#detail [data-fig]').forEach((el) => { if (!el.firstChild) Figure3D.mount(el, el.dataset.fig); });
     // photo flips between start and end position, like a slow animation
     if (!(window.Figure3D && Figure3D.has(it.ex) && !Figure3D.failed) && inf.img > 1 && (d.view === 'main' || d.view === 'howto') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -498,7 +533,7 @@
       const fromBottom = PLATES - 1 - i;
       plates[i].className = 'plate' + (fromBottom < lit ? (fromBottom === lit - 1 ? ' pin' : ' lit') : '');
     }
-    if (over && !t.beeped) { t.beeped = true; E.save(); beep(); }
+    if (over && !t.beeped) { t.beeped = true; E.save(); if (left > -30) beep(); }
     if (left < -600) stopTimer();
   }
   setInterval(tick, 250);
@@ -565,6 +600,35 @@
     list.forEach((e) => (groups[e.group] = groups[e.group] || []).push(e));
     sheet(`<h3>Add an exercise</h3>${Object.keys(groups).map((g) => `<p style="margin:14px 0 2px;font-weight:600;color:var(--ink)">${g}</p>${groups[g].map((e) => `<button class="rep-row" data-act="addexpick" data-ex="${e.id}">${thumb(e.id)}<span><b>${esc(e.name)}</b><small>${esc(muscleLine(e.id))}</small></span></button>`).join('')}`).join('')}`);
   }
+  const INFO = {
+    index: `<h3>Strength index</h3>
+      <p>One number for how much stronger you are than when you started.</p>
+      <ol class="steps-list">
+        <li>For every lift, the app works out your estimated 1-rep max each session from the weight and reps you did (the Epley formula: weight × (1 + reps ÷ 30)).</li>
+        <li>Your first session of each lift counts as 100. If your bench estimate goes from 150 to 165 lb, bench is at 110.</li>
+        <li>The strength index is the average of all your lifts on that day. 115 means about 15% stronger than when you started.</li>
+        <li>Bodyweight and timed moves use your best reps or seconds instead.</li>
+      </ol>
+      <p>Press and hold any chart to see the exact value on a date.</p>`,
+    method: `<h3>How your plan works</h3>
+      <p>Standard, well-tested strength training methods, set up as a strength and muscle hybrid (mostly 8 to 12 reps).</p>
+      <ol class="steps-list">
+        <li><b>4-week blocks.</b> Base, Build, Strength, then an easy Deload week so your body recovers. Exercises rotate each block. This is called block periodization.</li>
+        <li><b>Reps in reserve.</b> Each week says how hard the last set should feel, like "2 reps left". Training close to, but not at, failure builds muscle with less joint wear.</li>
+        <li><b>Double progression.</b> Hit every planned rep at a weight, and next time the weight goes up one step. Miss reps, and it holds or eases off.</li>
+        <li><b>Your answers count.</b> "How many more sets could you do": 0 holds the weight, 2 or 3+ moves it up faster. Cutting sets short holds the weight and trims the sets.</li>
+        <li><b>Joint protection.</b> Moves that load a sore joint are skipped and swapped for ones that don’t.</li>
+      </ol>`,
+    standards: `<h3>How you compare</h3>
+      <p>An estimate, not a national database. Each lift’s best recent estimated 1-rep max is divided by your body weight and compared to widely used strength standards for your sex, eased off a little for age past 35.</p>
+      <ol class="steps-list">
+        <li><b>Beginner:</b> new to lifting. <b>Novice:</b> a few months of steady training.</li>
+        <li><b>Intermediate:</b> a year or two. <b>Advanced:</b> several years of serious training.</li>
+        <li><b>Elite:</b> competitive athlete level.</li>
+      </ol>
+      <p>Dumbbell lifts are converted to a barbell equivalent, so treat it as a rough guide.</p>`,
+  };
+  function infoSheet(k) { sheet(INFO[k]); }
   function liftSheet(id) {
     const ex = E.exInfo(id);
     const series = E.liftSeries(id);
@@ -572,7 +636,7 @@
     const label = ex.unit === 'lb' ? 'Est. 1-rep max' : ex.unit === 'sec' ? 'Longest round' : 'Best set';
     sheet(`<h3>${esc(ex.name)}</h3>
       <p>${label}: ${Math.round(best)} ${ex.unit === 'lb' ? 'lb' : ex.unit === 'sec' ? 'sec' : 'reps'} best</p>
-      ${series.length > 1 ? lineChart(series, { h: 170 }) : '<div class="empty">Do this one again to start its chart.</div>'}
+      ${series.length > 1 ? lineChart(series, { h: 170, unit: ex.unit === 'lb' ? 'lb' : ex.unit === 'sec' ? 'sec' : 'reps' }) : '<div class="empty">Do this one again to start its chart.</div>'}
       <div style="margin-top:10px">${series.slice().reverse().slice(0, 12).map((p) => `<div class="log-ex" style="margin:0;padding:8px 0"><div><span>${fmtDate(p.date)}</span><span>${ex.unit === 'lb' ? fmtW(p.top.w) + ' lb × ' + p.top.r : p.top.r + (ex.unit === 'sec' ? ' sec' : ' reps')}${ex.unit === 'lb' ? ', est. max ' + Math.round(p.v) : ''}</span></div></div>`).join('')}</div>`);
   }
 
@@ -654,12 +718,14 @@
     const area = d + ` L${X(x1).toFixed(1)} ${H - pb} L${X(x0).toFixed(1)} ${H - pb} Z`;
     const ticks = [0, 0.5, 1].map((f) => y0 + (y1 - y0) * f);
     const xt = [x0, (x0 + x1) / 2, x1];
-    return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Chart">
+    const enc = pts.map((p) => [+X(+p.date).toFixed(1), +Y(p.v).toFixed(1), +p.date, Math.round(p.v * 10) / 10]);
+    return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Chart. Press and hold to see values." data-pts='${JSON.stringify(enc)}' data-unit="${esc(o.unit || '')}" data-h="${H - pb}">
       <defs><linearGradient id="fillgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc53d" stop-opacity="0.22"/><stop offset="1" stop-color="#ffc53d" stop-opacity="0"/></linearGradient></defs>
       ${ticks.map((t) => `<line class="grid" x1="${pl}" x2="${W - pr}" y1="${Y(t)}" y2="${Y(t)}"/><text class="axis" x="${W - pr + 6}" y="${Y(t) + 4}">${Math.round(t)}</text>`).join('')}
       ${xt.map((t, i) => `<text class="axis" x="${X(t)}" y="${H - 4}" text-anchor="${['start', 'middle', 'end'][i]}">${fmtDate(t, { month: 'short', day: 'numeric' })}</text>`).join('')}
       <path class="area" d="${area}"/><path class="line" d="${d}"/>
       ${pts.length < 40 ? pts.map((p) => `<circle class="dot" cx="${X(+p.date)}" cy="${Y(p.v)}" r="3.5"/>`).join('') : ''}
+      <g class="scrub" style="display:none"><line class="scrub-l" x1="0" x2="0" y1="${pt - 6}" y2="${H - pb}"/><circle class="scrub-d" r="5.5"/><g class="scrub-tip"><rect rx="6" height="34" width="92"/><text class="scrub-v" x="8" y="15"></text><text class="scrub-t" x="8" y="28"></text></g></g>
     </svg>`;
   }
   function spark(pts) {
@@ -682,19 +748,33 @@
       .map((id) => ({ id, ex: E.exInfo(id), s: E.liftSeries(id) }))
       .filter((l) => l.s.some((p) => p.date >= since))
       .sort((a, b) => b.s.length - a.s.length || a.ex.name.localeCompare(b.ex.name));
+    const rangeName = { week: 'this week', month: 'this month', '6m': 'in 6 months', year: 'this year' }[ui.range];
+    const deltaIn = (ser) => { const inR = ser.filter((p) => p.date >= since); if (!inR.length) return null; const base = ser.filter((p) => p.date < since).pop() || inR[0]; return inR[inR.length - 1].v - base.v; };
+    const std = E.standings();
+    const W = E.S.weights || [];
+    const wIn = W.filter((x) => new Date(x.date) >= since);
     app.innerHTML = `<div class="top"><div><div class="kicker">Strength vs. where you started</div><h1>Progress</h1></div></div>
       <div class="seg">${[['week', 'Week'], ['month', 'Month'], ['6m', '6 months'], ['year', 'Year']].map(([k, n]) => `<button class="${ui.range === k ? 'on' : ''}" data-act="range" data-k="${k}">${n}</button>`).join('')}</div>
       <div class="card">
+        <button class="info-btn" data-act="idxinfo" aria-label="How the strength index works">i</button>
         ${cur != null ? `<div class="big-num">${Math.round(cur)}<small>strength index</small></div>
           <div class="sub">${delta != null ? `<span class="${delta >= 0 ? 'delta-up' : 'delta-down'}">${delta >= 0 ? 'Up' : 'Down'} ${Math.abs(delta).toFixed(1)}</span> this ${{ week: 'week', month: 'month', '6m': '6 months', year: 'year' }[ui.range]}. 100 is where each lift started.` : '100 is where each lift started.'}</div>
-          ${shown.length > 1 ? lineChart(shown) : '<div class="empty">Not enough workouts in this range for a chart yet.</div>'}`
+          ${shown.length > 1 ? lineChart(shown, { unit: '' }) : '<div class="empty">Not enough workouts in this range for a chart yet.</div>'}`
         : `<div class="big-num">100<small>strength index</small></div><div class="empty">Your chart starts once you repeat a lift. Each lift starts at 100 and the number climbs as you get stronger.</div>`}
       </div>
       ${groups.length ? `<h2>By muscle</h2><div class="card">${groups.map((x) => { const last = x.s[x.s.length - 1].v; return `<div class="lift"><div class="nm">${x.g}</div>${spark(x.s.slice(-8))}<div class="val">${Math.round(last)}</div></div>`; }).join('')}</div>` : ''}
       <h2>Sets this week</h2>
       <div class="card bars">${E.GROUPS.map((g) => { const n = week[g], t = E.WEEKLY_TARGET[g]; return `<div class="b"><span>${g}</span><div class="track"><div class="fill ${n >= t ? 'met' : ''}" style="width:${Math.min(100, (n / t) * 100)}%"></div></div><span class="n">${n} / ${t}</span></div>`; }).join('')}</div>
-      <h2>Lifts</h2>
-      <div class="card">${lifts.length ? lifts.map((l) => { const last = l.s[l.s.length - 1]; const first = l.s[0]; const d = last.v - first.v; return `<button class="lift" data-act="lift" data-id="${l.id}">${thumb(l.id, 'thumb sm')}<div class="nm">${esc(l.ex.name)}<small>${l.s.length} session${l.s.length > 1 ? 's' : ''}${l.s.length > 1 && d ? `, <span class="${d > 0 ? 'delta-up' : 'delta-down'}">${d > 0 ? '+' : ''}${Math.round(d)}</span>` : ''}</small></div>${spark(l.s)}<div class="val">${Math.round(last.v)}<small style="color:var(--muted)">${l.ex.unit === 'lb' ? 'est. max' : l.ex.unit === 'sec' ? 'sec' : 'reps'}</small></div></button>`; }).join('') : '<div class="empty">No lifts in this range.</div>'}</div>`;
+      <h2>How you compare <button class="info-btn inline" data-act="stdinfo" aria-label="How the comparison works">i</button></h2>
+      <div class="card">${std === null ? `<div class="empty">Add your body weight, sex and age in the Body tab to see where your lifts rank, from beginner to elite.</div>` : std.length ? std.map((x) => `<div class="std"><div class="std-top"><b>${esc(x.name)}</b><span class="std-lv">${x.level}</span></div>
+          <div class="std-bar"><i style="left:${(x.pos * 100).toFixed(1)}%"></i></div><div class="std-scale">${E.LEVELS.map((l) => `<span>${l}</span>`).join('')}</div>
+          <div class="sub">Est. max ${x.e1rm} lb${x.from && E.exInfo(x.from).eq.includes('dumbbell') ? ' (barbell equivalent)' : ''}, ${x.ratio.toFixed(2)}× body weight.${x.next ? ` ${x.nextLevel} at about ${x.next} lb.` : ''}</div></div>`).join('') : '<div class="empty">None of your logged lifts match the standard lifts (bench, overhead press, squat, deadlift, row) yet.</div>'}</div>
+      ${W.length ? `<h2>Body weight</h2><div class="card"><div class="big-num">${fmtW(W[W.length - 1].lb)}<small>lb</small></div>
+        ${wIn.length > 1 ? `<div class="sub">${(() => { const dw = wIn[wIn.length - 1].lb - wIn[0].lb; return dw ? `<span class="${dw < 0 ? 'delta-up' : 'delta-down'}">${dw > 0 ? '+' : ''}${fmtW(dw)} lb</span> ${rangeName}` : 'No change ' + rangeName; })()}</div>${lineChart(wIn.map((x) => ({ date: new Date(x.date), v: x.lb })), { h: 140, unit: 'lb' })}` : '<div class="sub">Log it a few times to see a chart.</div>'}</div>` : ''}
+      <h2>Lifts <span class="h2-sub">change ${rangeName}</span></h2>
+      <div class="card">${lifts.length ? lifts.map((l) => { const last = l.s[l.s.length - 1]; const d = deltaIn(l.s); return `<button class="lift" data-act="lift" data-id="${l.id}">${thumb(l.id, 'thumb sm')}<div class="nm">${esc(l.ex.name)}<small>${l.s.length} session${l.s.length > 1 ? 's' : ''}${d ? `, <span class="${d > 0 ? 'delta-up' : 'delta-down'}">${d > 0 ? '+' : ''}${Math.round(d)}</span> ${rangeName}` : ''}</small></div>${spark(l.s)}<div class="val">${Math.round(last.v)}<small style="color:var(--muted)">${l.ex.unit === 'lb' ? 'est. max' : l.ex.unit === 'sec' ? 'sec' : 'reps'}</small></div></button>`; }).join('') : '<div class="empty">No lifts in this range.</div>'}</div>
+      <button class="btn-quiet" data-act="openlib">See all exercises</button>
+      <button class="btn-link" data-act="methodinfo">How your plan decides weights and reps</button>`;
   }
 
   // ---------------- body ----------------
@@ -715,9 +795,22 @@
       <h2>Pain log</h2>
       <div class="card">${S.painLog.length ? S.painLog.slice().reverse().slice(0, 12).map((p) => `<div class="pain"><b>${fmtDate(p.at, { month: 'short', day: 'numeric' })}: ${esc((JOINTS.find((j) => j.id === p.joint) || { name: 'Other' }).name)}, ${esc(p.severity)}</b>${p.ex ? ` <span>on ${esc(E.exInfo(p.ex).name.toLowerCase())}</span>` : ''}${p.note ? `<br><span>${esc(p.note)}</span>` : ''}</div>`).join('') : '<div class="empty">No pain logged.</div>'}</div>
 
+      <h2>Body weight</h2>
+      <div class="card"><div class="bw-row"><input id="bw-in" class="text-in" inputmode="decimal" placeholder="${E.bodyweight() ? fmtW(E.bodyweight()) : 'Weight'}" aria-label="Body weight in pounds"><span class="bw-u">lb</span><button class="btn-small" data-act="bwsave">Save</button></div>
+        <div class="sub" style="margin-top:8px">${E.bodyweight() ? `Last: ${fmtW(E.bodyweight())} lb on ${fmtDate(S.weights[S.weights.length - 1].date, { month: 'short', day: 'numeric' })}. Chart is on the Progress tab.` : 'Log it now and then. The chart shows on Progress.'}</div></div>
+
+      <h2>About you</h2>
+      <div class="sub" style="margin:0 4px 8px">Used to compare your lifts with strength standards.</div>
+      <div class="chips"><button class="chip ${P.sex === 'm' ? 'on' : ''}" data-act="sex" data-k="m">Male</button><button class="chip ${P.sex === 'f' ? 'on' : ''}" data-act="sex" data-k="f">Female</button></div>
+      <div class="about-row"><label>Age<input id="age-in" class="text-in" inputmode="numeric" value="${P.age || ''}" placeholder="—"></label>
+        <label>Height<span class="ht"><input id="ht-ft" class="text-in" inputmode="numeric" value="${P.heightIn ? Math.floor(P.heightIn / 12) : ''}" placeholder="ft"><input id="ht-in" class="text-in" inputmode="numeric" value="${P.heightIn ? P.heightIn % 12 : ''}" placeholder="in"></span></label></div>
+
       <h2>Talk it through</h2>
       <div class="card"><div class="sub" style="color:#c9d0d7">Copy a summary of your joints, pain log and last workouts, then paste it to Claude. Claude can work out what’s causing it and update the app.</div>
-        <button class="btn-main" data-act="copysum" style="margin-top:12px;height:52px;font-size:21px">Copy summary for Claude</button></div>
+        <button class="btn-main" data-act="copysum" style="margin-top:12px;height:52px;font-size:21px">Copy summary for Claude</button>
+        <div class="sub" style="color:#c9d0d7;margin-top:14px">Or copy your workouts (sets, weights, minutes, estimated calories) to track alongside food in Claude.</div>
+        <div class="two-btn"><button class="btn-quiet" data-act="copyclaude" data-k="7">Last 7 days</button><button class="btn-quiet" data-act="copyclaude" data-k="30">Last 30 days</button></div></div>
+      <button class="btn-link" data-act="methodinfo">How your plan decides weights and reps</button>
 
       <h2>Your plan</h2>
       <div class="lbl">Goal</div>
@@ -742,7 +835,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv" hidden>
-      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v1.6</div>`;
+      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v1.7</div>`;
   }
 
   // ---------------- actions ----------------
@@ -750,6 +843,7 @@
     const plan = curPlan();
     const it = plan.items[i];
     it.sets[j][field] = val;
+    if (it.sets[j].warm) return E.save();
     for (let k = j + 1; k < it.sets.length; k++) if (!it.sets[k].done && !it.sets[k].warm) it.sets[k][field] = val;
     E.save();
   }
@@ -773,8 +867,11 @@
 
   document.addEventListener('click', (ev) => {
     unlockAudio();
+    if (eatClick) { ev.preventDefault(); ev.stopPropagation(); eatClick = false; return; }
     const el = ev.target.closest('[data-act]');
     if (!el) return;
+    const ae = document.activeElement;
+    if (ae && ae !== el && ae.matches && ae.matches('input[data-f], #steps-in, #bw-in')) ae.blur(); // fires 'change' first
     const act = el.dataset.act;
     if (act === 'close' && ev.target !== el) return;
     const i = el.dataset.i != null ? +el.dataset.i : null;
@@ -858,10 +955,10 @@
       case 'dislike': {
         const plan = curPlan(); const id = plan.items[i].ex; E.dislike(id);
         const opts = E.swapOptions(plan, i);
-        if (opts.length) E.swapTo(plan, i, opts[0].id); else plan.items.splice(i, 1);
+        if (opts.length) E.swapTo(plan, i, opts[0].id); else if (!plan.items[i].sets.some((x) => x.done)) plan.items.splice(i, 1);
         E.save(); closeSheet(); ui.detail = null; render(); toast('Got it. ' + E.exInfo(id).name + ' won’t come up again'); break;
       }
-      case 'rmex': { const plan = curPlan(); plan.items.splice(i, 1); E.save(); closeSheet(); ui.detail = null; render(); break; }
+      case 'rmex': { const plan = curPlan(); if (c && plan.items[i] && plan.items[i].sets.some((x) => x.done) && !confirm('Remove ' + E.exInfo(plan.items[i].ex).name + '? Its logged sets won’t be saved.')) break; plan.items.splice(i, 1); E.save(); closeSheet(); ui.detail = null; render(); break; }
       case 'painsheet': painSheet(i); break;
       case 'pj': pain.joint = el.dataset.k; document.querySelectorAll('#pjoint .opt').forEach((b) => b.classList.toggle('on', b === el)); $('#ptip').innerHTML = JOINT_TIPS[pain.joint] ? `<div class="tip">${esc(JOINT_TIPS[pain.joint])}</div>` : ''; break;
       case 'ps': pain.sev = el.dataset.k; document.querySelectorAll('#psev .opt').forEach((b) => b.classList.toggle('on', b === el)); break;
@@ -899,6 +996,20 @@
       case 'openlog': if (ev.target.closest('[data-act="dellog"]')) break; ui.openLog = ui.openLog === el.dataset.id ? null : el.dataset.id; render(); break;
       case 'dellog': ev.stopPropagation(); if (confirm('Delete this workout from your log?')) { E.S.history = E.S.history.filter((h) => h.id !== el.dataset.id); E.save(); render(); } break;
       case 'range': ui.range = el.dataset.k; render(); break;
+      case 'openlib': openLibrary(); break;
+      case 'libg': ui.detail.g = el.dataset.k; renderDetail(); break;
+      case 'libopen': ui.detail = { lib: el.dataset.ex, fromLib: { q: ui.detail.q, g: ui.detail.g }, view: 'main', tab: 0, q: '' }; renderDetail(); $('#detail .detail').scrollTop = 0; break;
+      case 'libback': { const f = ui.detail.fromLib || { q: '', g: 'All' }; ui.detail = { library: true, view: 'library', q: f.q, g: f.g }; renderDetail(); break; }
+      case 'idxinfo': infoSheet('index'); break;
+      case 'methodinfo': infoSheet('method'); break;
+      case 'stdinfo': infoSheet('standards'); break;
+      case 'bwsave': { const v = parseFloat(($('#bw-in') || {}).value); if (!(v > 50 && v < 700)) { toast('Type your weight in pounds'); break; } E.logWeight(Math.round(v * 10) / 10); toast('Weight saved'); render(); break; }
+      case 'sex': E.S.profile.sex = el.dataset.k; E.save(); render(); break;
+      case 'copyclaude': {
+        const txt = E.exportForClaude(+el.dataset.k || 30);
+        (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Copied. Paste it into Claude'), () => { sheet(`<h3>Copy this</h3><textarea style="min-height:300px">${esc(txt)}</textarea>`); });
+        break;
+      }
       case 'lift': liftSheet(el.dataset.id); break;
       case 'joint': E.S.joints[el.dataset.j] = el.dataset.k; E.save(); afterPlanChange(); render(); break;
       case 'unban': E.unban(el.dataset.id); afterPlanChange(); render(); break;
@@ -926,44 +1037,94 @@
     }
   });
 
-  // ---------------- drag to reorder ----------------
-  let drag = null;
+  // ---------------- press and hold a chart to read values ----------------
+  let scrub = null;
+  function scrubAt(svg, clientX) {
+    const pts = JSON.parse(svg.dataset.pts || '[]');
+    if (!pts.length) return;
+    const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+    const x = ((clientX - r.left) / r.width) * vb.width;
+    let best = pts[0];
+    for (const p of pts) if (Math.abs(p[0] - x) < Math.abs(best[0] - x)) best = p;
+    const g = svg.querySelector('.scrub');
+    g.style.display = '';
+    const l = g.querySelector('.scrub-l'); l.setAttribute('x1', best[0]); l.setAttribute('x2', best[0]);
+    const dt = g.querySelector('.scrub-d'); dt.setAttribute('cx', best[0]); dt.setAttribute('cy', best[1]);
+    const unit = svg.dataset.unit;
+    g.querySelector('.scrub-v').textContent = fmtW(best[3]) + (unit ? ' ' + unit : '');
+    g.querySelector('.scrub-t').textContent = fmtDate(best[2], { month: 'short', day: 'numeric', year: 'numeric' });
+    const tip = g.querySelector('.scrub-tip');
+    const tx = Math.max(2, Math.min(vb.width - 96, best[0] - 46));
+    tip.setAttribute('transform', `translate(${tx} 0)`);
+  }
   document.addEventListener('pointerdown', (ev) => {
-    const h = ev.target.closest('[data-drag]');
-    if (!h || !E.S) return;
-    ev.preventDefault();
-    const cards = [...app.querySelectorAll('.ex[data-i]')];
-    const from = +h.dataset.drag;
-    const card = cards[from];
-    if (!card) return;
-    const sy = window.scrollY;
-    drag = { from, to: from, card, cards, y0: ev.pageY, mids: cards.map((c) => { const r = c.getBoundingClientRect(); return r.top + sy + r.height / 2; }), h: card.getBoundingClientRect().height + 10, id: ev.pointerId };
-    card.classList.add('dragging');
-    document.body.classList.add('is-dragging');
-    try { h.setPointerCapture(ev.pointerId); } catch (e) {}
+    const svg = ev.target.closest && ev.target.closest('svg.chart[data-pts]');
+    if (!svg) return;
+    scrub = { svg, id: ev.pointerId };
+    scrubAt(svg, ev.clientX);
   });
-  document.addEventListener('pointermove', (ev) => {
-    if (!drag || ev.pointerId !== drag.id) return;
-    if (ev.clientY < 90) window.scrollBy(0, -10); else if (ev.clientY > innerHeight - 150) window.scrollBy(0, 10);
-    const dy = ev.pageY - drag.y0;
-    drag.card.style.transform = `translateY(${dy}px)`;
+  document.addEventListener('pointermove', (ev) => { if (scrub && ev.pointerId === scrub.id) scrubAt(scrub.svg, ev.clientX); });
+  const endScrub = (ev) => { if (!scrub || ev.pointerId !== scrub.id) return; const g = scrub.svg.querySelector('.scrub'); if (g) g.style.display = 'none'; scrub = null; };
+  document.addEventListener('pointerup', endScrub);
+  document.addEventListener('pointercancel', endScrub);
+
+  // ---------------- press and hold an exercise to move it ----------------
+  let drag = null, hold = null, eatClick = false;
+  function startDrag(st) {
+    const cards = [...app.querySelectorAll('.ex[data-i]')];
+    const from = cards.indexOf(st.card);
+    if (from < 0) return;
+    const sy = window.scrollY;
+    drag = { from, to: from, card: st.card, cards, y0: st.y + sy, lastY: st.y, mids: cards.map((c) => { const r = c.getBoundingClientRect(); return r.top + sy + r.height / 2; }), h: st.card.getBoundingClientRect().height + 10, id: st.id };
+    st.card.classList.add('dragging');
+    document.body.classList.add('is-dragging');
+    eatClick = true;
+    if (navigator.vibrate) navigator.vibrate(12);
+  }
+  function moveDrag(clientY) {
+    drag.lastY = clientY;
+    const dy = clientY + window.scrollY - drag.y0;
+    drag.card.style.transform = `translateY(${dy}px) scale(1.02)`;
     const mid = drag.mids[drag.from] + dy;
     let to = drag.from;
-    drag.mids.forEach((m, k) => { if (k > drag.from && mid > m) to = k; if (k < drag.from && mid < m && to >= drag.from) to = k; });
-    if (mid < drag.mids[drag.from]) { to = drag.from; for (let k = drag.from - 1; k >= 0; k--) if (mid < drag.mids[k]) to = k; }
+    if (dy > 0) { for (let k = drag.from + 1; k < drag.mids.length; k++) if (mid > drag.mids[k]) to = k; }
+    else { for (let k = drag.from - 1; k >= 0; k--) if (mid < drag.mids[k]) to = k; }
     drag.to = to;
     drag.cards.forEach((c, k) => {
       if (c === drag.card) return;
       const shift = drag.from < to && k > drag.from && k <= to ? -drag.h : drag.from > to && k < drag.from && k >= to ? drag.h : 0;
       c.style.transform = shift ? `translateY(${shift}px)` : '';
     });
+  }
+  document.addEventListener('pointerdown', (ev) => {
+    if (!E.S || ui.detail || drag) return;
+    const head = ev.target.closest('.ex[data-i] .ex-head');
+    if (!head || ev.target.closest('.ex-more')) return;
+    const card = head.closest('.ex');
+    hold = { card, id: ev.pointerId, x: ev.clientX, y: ev.clientY, t: setTimeout(() => { if (hold) { startDrag(hold); hold = null; } }, 380) };
+    card.classList.add('pressing');
   });
+  const cancelHold = () => { if (hold) { clearTimeout(hold.t); hold.card.classList.remove('pressing'); hold = null; } };
+  document.addEventListener('pointermove', (ev) => {
+    if (hold && ev.pointerId === hold.id && Math.hypot(ev.clientX - hold.x, ev.clientY - hold.y) > 8) cancelHold();
+    if (drag && ev.pointerId === drag.id) moveDrag(ev.clientY);
+  });
+  // While dragging, stop the page from scrolling under your finger; scroll it ourselves near the edges.
+  document.addEventListener('touchmove', (ev) => { if (drag) ev.preventDefault(); }, { passive: false });
+  setInterval(() => {
+    if (!drag) return;
+    const y = drag.lastY;
+    const v = y < 110 ? -12 : y > innerHeight - 170 ? 12 : 0;
+    if (v) { window.scrollBy(0, v); moveDrag(y); }
+  }, 16);
   function endDrag(ev) {
+    if (hold && (!ev || ev.pointerId === hold.id)) cancelHold();
     if (!drag || (ev && ev.pointerId !== drag.id)) return;
     const { from, to, cards } = drag;
-    cards.forEach((c) => { c.style.transform = ''; c.classList.remove('dragging'); });
+    cards.forEach((c) => { c.style.transform = ''; c.classList.remove('dragging', 'pressing'); });
     document.body.classList.remove('is-dragging');
     drag = null;
+    setTimeout(() => (eatClick = false), 350);
     if (to !== from) {
       const items = curPlan().items;
       const [m] = items.splice(from, 1);
@@ -974,6 +1135,33 @@
   }
   document.addEventListener('pointerup', endDrag);
   document.addEventListener('pointercancel', endDrag);
+  document.addEventListener('contextmenu', (ev) => { if (ev.target.closest && ev.target.closest('.ex-head')) ev.preventDefault(); });
+
+  // ---------------- swipe down to close sheets and the exercise screen ----------------
+  let swipe = null;
+  document.addEventListener('touchstart', (ev) => {
+    const el = ev.target.closest && (ev.target.closest('.sheet') || ev.target.closest('#detail .detail'));
+    if (!el || ev.target.closest('svg.chart') || ev.target.closest('.hero-fig')) return;
+    if (el.scrollTop > 0) return;
+    swipe = { el, y: ev.touches[0].clientY, dy: 0, sheet: el.classList.contains('sheet') };
+  }, { passive: true });
+  document.addEventListener('touchmove', (ev) => {
+    if (!swipe || drag) return;
+    const dy = ev.touches[0].clientY - swipe.y;
+    if (swipe.el.scrollTop > 0 || dy < 0) { if (!swipe.dy) { swipe = null; return; } }
+    swipe.dy = Math.max(0, dy);
+    if (swipe.dy > 6) { ev.preventDefault(); swipe.el.style.transition = 'none'; swipe.el.style.transform = `translateY(${swipe.dy}px)`; }
+  }, { passive: false });
+  document.addEventListener('touchend', () => {
+    if (!swipe) return;
+    const { el, dy, sheet: isSheet } = swipe;
+    swipe = null;
+    el.style.transition = 'transform .22s ease';
+    if (dy > 110) {
+      el.style.transform = 'translateY(100%)';
+      setTimeout(() => { el.style.transition = ''; el.style.transform = ''; if (isSheet) overlay.innerHTML = ''; else { ui.detail = null; detailEl.textContent = ''; document.body.classList.remove('noscroll'); render(); } }, 200);
+    } else { el.style.transform = ''; setTimeout(() => (el.style.transition = ''), 230); }
+  });
 
   document.addEventListener('change', (ev) => {
     const t = ev.target;
@@ -981,6 +1169,11 @@
       const v = parseFloat(t.value);
       if (!isNaN(v)) updateSet(+t.dataset.i, +t.dataset.j, t.dataset.f, t.dataset.f === 'r' ? Math.round(v) : v);
       render();
+    } else if (t.id === 'age-in' || t.id === 'ht-ft' || t.id === 'ht-in') {
+      const P = E.S.profile;
+      if (t.id === 'age-in') { const v = parseInt(t.value, 10); P.age = v > 10 && v < 100 ? v : null; }
+      else { const ft = parseInt(($('#ht-ft') || {}).value, 10) || 0, inch = parseInt(($('#ht-in') || {}).value, 10) || 0; P.heightIn = ft ? ft * 12 + inch : null; }
+      E.save(); render();
     } else if (t.id === 'steps-in') {
       const v = parseInt(t.value.replace(/\D/g, ''), 10) || 0;
       E.S.steps[todayKey()] = v; E.save(); render();
@@ -997,6 +1190,13 @@
     }
   });
   document.addEventListener('input', (ev) => {
+    if (ev.target.id === 'su-name' && ui.setup) ui.setup.name = ev.target.value;
+    if (ev.target.id === 'lib-q' && ui.detail) {
+      ui.detail.q = ev.target.value;
+      const pos = ev.target.selectionStart;
+      renderDetail();
+      const q = $('#lib-q'); if (q) { q.focus(); q.setSelectionRange(pos, pos); }
+    }
     if (ev.target.id === 'rep-q' && ui.detail) {
       ui.detail.q = ev.target.value;
       const pos = ev.target.selectionStart;

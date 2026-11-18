@@ -22,6 +22,7 @@
       notes: {},
       rest: {},
       steps: {},
+      weights: [],
       rotIdx: null,
       history: SEED_HISTORY.map((h, i) => ({
         id: 'seed' + i,
@@ -48,7 +49,7 @@
       profile: { name: o.name || '', place: o.place, split: o.split, goal: o.goal, stepGoal: o.stepGoal || 0 },
       settings: { minutes: o.minutes || 45, equipment: eq, dumbbells: o.place === 'home' && o.dumbbells && o.dumbbells.length ? o.dumbbells.slice().sort((a, b) => a - b) : null },
       programStart: iso,
-      joints, bans: {}, swaps: {}, painLog: [], custom: {}, notes: {}, rest: {}, steps: {}, rotIdx: 0,
+      joints, bans: {}, swaps: {}, painLog: [], custom: {}, notes: {}, rest: {}, steps: {}, weights: [], rotIdx: 0,
       history: [], current: null, timer: null,
     };
   }
@@ -60,6 +61,8 @@
     s.notes = s.notes || {};
     s.rest = s.rest || {};
     s.steps = s.steps || {};
+    s.custom = s.custom || {};
+    s.weights = s.weights || [];
     if (s.rotIdx === undefined) s.rotIdx = null;
     delete s.settings.order;
     return s;
@@ -235,10 +238,11 @@
     const done = en.sets.filter((s) => s.done && !s.warm).length;
     // Couldn't finish all the sets: plan what was done (at least 2) and hold the weight.
     if (en.planned && done < en.planned) { t.sets = Math.max(2, done); t.short = true; }
-    if (ex.unit !== 'lb' || en.left == null) return t;
+    if (ex.unit !== 'lb') return t;
     const lastTop = Math.max(...en.sets.map((s) => s.w || 0));
-    if (en.left === 0 || t.short) { if (t.w > lastTop) { t.w = lastTop; t.maxed = false; } }
-    else if (en.left >= 3 && t.w >= lastTop && !ownedDumbbells(ex)) t.w = nudgeW(Math.max(t.w, nudgeW(lastTop, ex, 1)), ex, 1);
+    if ((t.short || en.left === 0) && t.w > lastTop) { t.w = lastTop; t.maxed = false; }
+    if (en.left == null || t.short || en.left === 0) return t;
+    if (en.left >= 3 && t.w >= lastTop && !ownedDumbbells(ex)) t.w = nudgeW(Math.max(t.w, nudgeW(lastTop, ex, 1)), ex, 1);
     else if (en.left === 2 && t.w <= lastTop && !ownedDumbbells(ex)) {
       const hit = en.sets.every((s) => !s.tr || s.r >= s.tr);
       if (hit) t.w = nudgeW(lastTop, ex, 1);
@@ -590,7 +594,7 @@
   function importJSON(txt) {
     const s = JSON.parse(txt);
     if (!s || s.version !== 1 || !Array.isArray(s.history)) throw new Error('That isn’t a Spotter backup.');
-    S = s;
+    S = migrate(s);
     save();
   }
   function norm(n) {
@@ -681,12 +685,13 @@
       const ex = exInfo(id);
       if (ex.unit === 'sec' && cDur >= 0) reps = parseInt(r[cDur]) || reps;
       if (!reps) continue;
-      if (S.custom[id] && w === 0) S.custom[id].unit = 'bw';
+      if (S.custom[id]) { const c = S.custom[id]; c._w = (c._w || 0) + (w > 0 ? 1 : 0); c._n = (c._n || 0) + 1; }
       const key = localKey(d);
       byDay[key] = byDay[key] || { date: d.toISOString(), entries: {} };
       if (d < new Date(byDay[key].date)) byDay[key].date = d.toISOString();
       (byDay[key].entries[id] = byDay[key].entries[id] || []).push({ w, r: reps, done: true });
     }
+    Object.values(S.custom).forEach((c) => { if (c._n) { if (!c._w) c.unit = 'bw'; else if (c.unit === 'bw') c.unit = 'lb'; } delete c._w; delete c._n; });
     const existing = new Set(S.history.map((h) => localKey(h.date)));
     let added = 0;
     for (const k of Object.keys(byDay)) {
@@ -709,6 +714,77 @@
     S.history.sort((a, b) => new Date(a.date) - new Date(b.date));
     save();
     return { added, unknown: Object.keys(unknown) };
+  }
+
+  // ---------- body weight ----------
+  function logWeight(lb) {
+    const k = localKey(new Date());
+    S.weights = S.weights.filter((x) => localKey(x.date) !== k);
+    S.weights.push({ date: new Date().toISOString(), lb });
+    S.weights.sort((a, b) => new Date(a.date) - new Date(b.date));
+    save();
+  }
+  function bodyweight() { return S.weights.length ? S.weights[S.weights.length - 1].lb : null; }
+
+  // ---------- strength standards (estimate) ----------
+  // Rough public strength-standard ratios: est. 1-rep max ÷ bodyweight at each level, by sex.
+  // Dumbbell lifts are converted to a barbell-equivalent (two dumbbells ≈ 80% of the barbell lift).
+  const LEVELS = ['Beginner', 'Novice', 'Intermediate', 'Advanced', 'Elite'];
+  const STANDARDS = {
+    bench: { name: 'Bench press', m: [0.5, 0.75, 1.0, 1.5, 2.0], f: [0.25, 0.5, 0.75, 1.0, 1.5], lifts: { bb_bench: 1, db_bench: 2 / 0.8, close_grip_bench: 1.1, bb_floor_press: 1.1, db_floor_press: 2 / 0.75 } },
+    press: { name: 'Overhead press', m: [0.35, 0.55, 0.75, 1.0, 1.4], f: [0.2, 0.35, 0.5, 0.75, 1.0], lifts: { bb_ohp: 1, db_shoulder_press: 2 / 0.8, standing_db_press: 2 / 0.8 } },
+    squat: { name: 'Squat', m: [0.75, 1.25, 1.5, 2.25, 2.75], f: [0.5, 0.75, 1.25, 1.5, 2.0], lifts: { back_squat: 1, fb_frontsquat: 1.2, goblet_squat: 1.9, box_goblet_squat: 1.9 } },
+    deadlift: { name: 'Deadlift', m: [1.0, 1.5, 2.0, 2.5, 3.0], f: [0.5, 1.0, 1.25, 1.75, 2.5], lifts: { fb_deadlift: 1, fb_sumodeadlift: 1, bb_rdl: 1.25, stiff_leg_dl: 1.3, db_rdl: 2 / 0.8 * 1.25, kb_deadlift: 1.6 } },
+    row: { name: 'Row', m: [0.5, 0.75, 1.0, 1.25, 1.75], f: [0.25, 0.4, 0.65, 0.9, 1.2], lifts: { bb_row: 1, db_row: 2 / 0.85, cs_db_row: 2 / 0.85 } },
+  };
+  // Older lifters: standards ease off a little each year past 35
+  const ageFactor = (age) => (!age || age <= 35 ? 1 : Math.max(0.6, 1 - (age - 35) * 0.01));
+  function standings() {
+    const bw = bodyweight(), P = S.profile;
+    if (!bw || !P.sex) return null;
+    const out = [];
+    for (const key of Object.keys(STANDARDS)) {
+      const st = STANDARDS[key];
+      let best = 0, from = null;
+      for (const id of Object.keys(st.lifts)) {
+        const ses = sessionsFor(id).slice(-6);
+        if (!ses.length) continue;
+        const v = Math.max(...ses.map((x) => bestE1rm(x.sets))) * st.lifts[id];
+        if (v > best) { best = v; from = id; }
+      }
+      if (!best) continue;
+      const ratio = best / bw / ageFactor(P.age);
+      const lv = st[P.sex === 'f' ? 'f' : 'm'];
+      let i = 0;
+      while (i < lv.length - 1 && ratio >= lv[i + 1]) i++;
+      const lo = lv[i], hi = lv[i + 1];
+      const pos = ratio < lv[0] ? (ratio / lv[0]) * 0.2 : hi ? (i + (ratio - lo) / (hi - lo)) / (lv.length - 1) : 1;
+      out.push({ key, name: st.name, from, e1rm: Math.round(best), ratio, level: ratio < lv[0] ? 'Beginner' : LEVELS[i], pos: Math.max(0, Math.min(1, pos)), next: hi ? Math.round(hi * bw * ageFactor(P.age)) : null, nextLevel: hi ? LEVELS[i + 1] : null });
+    }
+    return out;
+  }
+
+  // ---------- plain-text workout export (to paste into Claude) ----------
+  function exportForClaude(days) {
+    const since = Date.now() - (days || 30) * DAY;
+    const H = S.history.filter((h) => new Date(h.date) >= since);
+    const bw = bodyweight();
+    const L = ['Workouts from Get F*ing Jacked!' + (S.profile.name ? ' (' + S.profile.name + ')' : '') + ', last ' + (days || 30) + ' days', ''];
+    if (bw) L.push('Body weight: ' + bw + ' lb' + (S.weights.length > 1 ? ' (was ' + S.weights[0].lb + ' lb on ' + new Date(S.weights[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ')' : ''), '');
+    for (const h of H) {
+      const mins = h.minutes || Math.round(h.entries.reduce((a, e) => a + e.sets.length, 0) * 2.5);
+      // ~5 kcal/min for weight training at moderate effort, scaled by body weight (150 lb baseline)
+      const kcal = Math.round(mins * 5 * ((bw || 150) / 150));
+      L.push(new Date(h.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ', ' + ((DAYS[h.day] && DAYS[h.day].name) || h.day) + ', ' + mins + ' min, about ' + kcal + ' kcal burned');
+      for (const en of h.entries) {
+        const ex = exInfo(en.ex);
+        const sets = en.sets.filter((x) => !x.warm).map((x) => (ex.unit === 'lb' ? x.w + ' lb × ' + x.r : x.r + (ex.unit === 'sec' ? ' sec' : ' reps'))).join(', ');
+        L.push('  ' + ex.name + ': ' + sets);
+      }
+      L.push('');
+    }
+    if (!H.length) L.push('No workouts in this period.');
+    return L.join('\n');
   }
 
   function summaryForClaude() {
@@ -736,6 +812,6 @@
     save, EX, exInfo, e1rm, roundW, nudgeW, blockInfo, nextDayType, blockedBy, allowed, generate, avoidedFor,
     swapItem, swapOptions, swapTo, startWorkout, finishWorkout, reportPain, dislike, unban, volume, rangeStart,
     strengthSeries, liftSeries, setsByGroup, weekStart, liftsTrained, GROUPS, WEEKLY_TARGET, sessionsFor, bestE1rm,
-    exportJSON, importJSON, importFitbod, summaryForClaude, banActive, reset() { S = freshState(); save(); },
+    exportJSON, importJSON, importFitbod, logWeight, bodyweight, standings, exportForClaude, LEVELS, localKey, summaryForClaude, banActive, reset() { localStorage.removeItem(KEY); S = null; },
   };
 })();

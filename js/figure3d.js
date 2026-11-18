@@ -6,7 +6,7 @@
   const has = (id) => !!(F && F.defs[id]);
   let T = null, loading = null, failed = false;
   const thumbs = {};
-  try { Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v1') || '{}')); } catch (e) {}
+  try { Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v2') || '{}')); } catch (e) {}
 
   function load() {
     if (T) return Promise.resolve(T);
@@ -17,10 +17,10 @@
   // ---------- body part shapes: radius along the bone, t = 0 at the near joint ----------
   const SHAPES = {
     torso: { len: 50, keys: [[0, 13], [0.2, 12.4], [0.45, 14.4], [0.72, 16.6], [0.9, 16.4], [1, 11.5]], capA: true, capB: true, front: 1 },
-    ua: { len: 28, keys: [[0, 7.8], [0.3, 7.2], [0.55, 7.2], [0.85, 5.2], [1, 4.6]], front: -1 },
-    fa: { len: 25, keys: [[0, 4.8], [0.2, 5.8], [0.6, 4.2], [1, 3.2]], front: -1 },
-    th: { len: 40, keys: [[0, 9.8], [0.2, 9.6], [0.5, 8.4], [0.85, 6.2], [1, 5.4]], front: -1 },
-    sh: { len: 38, keys: [[0, 5.3], [0.22, 6.4], [0.5, 4.8], [0.85, 3.4], [1, 3.1]], front: -1 },
+    ua: { len: 28, keys: [[0, 7.8], [0.3, 7.2], [0.55, 7.2], [0.85, 5.2], [1, 4.6]], front: -1, capA: true, capB: true },
+    fa: { len: 25, keys: [[0, 4.8], [0.2, 5.8], [0.6, 4.2], [1, 3.2]], front: -1, capA: true, capB: true },
+    th: { len: 40, keys: [[0, 9.8], [0.2, 9.6], [0.5, 8.4], [0.85, 6.2], [1, 5.4]], front: -1, capA: true, capB: true },
+    sh: { len: 38, keys: [[0, 5.3], [0.22, 6.4], [0.5, 4.8], [0.85, 3.4], [1, 3.1]], front: -1, capA: true, capB: true },
     neck: { len: 8, keys: [[0, 5.6], [1, 5]], front: 1 },
   };
   // Muscle patches: [name, t0, t1, angle from front (deg) min, max]
@@ -44,10 +44,10 @@
       return k[k.length - 1][1];
     };
     const r0 = r(0), r1 = r(1);
-    if (S.capA) for (const a of [-90, -65, -40, -18]) pts.push(new T.Vector2(Math.max(0.01, r0 * Math.cos((a * Math.PI) / 180)), r0 * 0.55 * Math.sin((a * Math.PI) / 180)));
+    if (S.capA) for (const a of [-90, -72, -54, -36, -18]) pts.push(new T.Vector2(Math.max(0.01, r0 * Math.cos((a * Math.PI) / 180)), r0 * 0.55 * Math.sin((a * Math.PI) / 180)));
     for (let i = 0; i <= N; i++) pts.push(new T.Vector2(r(i / N), (i / N) * S.len));
-    if (S.capB) for (const a of [18, 40, 65, 90]) pts.push(new T.Vector2(Math.max(0.01, r1 * Math.cos((a * Math.PI) / 180)), S.len + r1 * 0.55 * Math.sin((a * Math.PI) / 180)));
-    const g = new T.LatheGeometry(pts, 32);
+    if (S.capB) for (const a of [18, 36, 54, 72, 90]) pts.push(new T.Vector2(Math.max(0.01, r1 * Math.cos((a * Math.PI) / 180)), S.len + r1 * 0.55 * Math.sin((a * Math.PI) / 180)));
+    const g = new T.LatheGeometry(pts, 40);
     const pos = g.attributes.position, nor = g.attributes.normal;
     const col = new Float32Array(pos.count * 3);
     const cBase = new T.Color(BASE), cR = new T.Color(RED), cO = new T.Color(ORANGE), c = new T.Color();
@@ -78,7 +78,7 @@
   }
   // Sphere-like parts (joints, delts, pelvis, head, hands, feet), optionally tinted
   function blobGeom(rx, ry, rz, tint, region) {
-    const g = new T.SphereGeometry(1, 28, 20);
+    const g = new T.SphereGeometry(1, 36, 26);
     g.scale(rx, ry, rz);
     const pos = g.attributes.position, col = new Float32Array(pos.count * 3);
     const cBase = new T.Color(BASE), c = new T.Color();
@@ -123,13 +123,15 @@
       delt: blobGeom(9, 8.6, 8.8, tint(tg.delts)),
       elbow: blobGeom(4.5, 4.5, 4.5), knee: blobGeom(5.4, 5.4, 5.4),
       pelvis: blobGeom(11.5, 10, 15, tint(tg.glutes), (x, y) => sstep(0.05, -0.45, x) * sstep(0.5, -0.1, y)),
-      head: blobGeom(7.6, 9.2, 7.4), hand: blobGeom(3.2, 4.6, 2.6), foot: blobGeom(8.2, 3.4, 4),
+      head: blobGeom(7.4, 9, 7.2), chin: blobGeom(4.6, 4.2, 5.4), hand: blobGeom(3.3, 4.8, 2.4), thumb: blobGeom(1.4, 2.6, 1.4), foot: blobGeom(8.6, 3.2, 4.1),
+      hipj: blobGeom(9.6, 9.6, 9.6, tint(tg.glutes), (x, y) => sstep(0.1, -0.5, x) * 0.9), ankle: blobGeom(3.3, 3.3, 3.3),
     };
     const M = (g, m) => { const o = new T.Mesh(g, m || mat); scene.add(o); return o; };
     const parts = {
       torso: M(G.torso), pelvis: M(G.pelvis), neck: M(G.neck), head: M(G.head),
       ua: [M(G.ua), M(G.ua)], fa: [M(G.fa), M(G.fa)], th: [M(G.th), M(G.th)], sh: [M(G.sh), M(G.sh)],
       delt: [M(G.delt), M(G.delt)], elbow: [M(G.elbow), M(G.elbow)], knee: [M(G.knee), M(G.knee)], hand: [M(G.hand), M(G.hand)], foot: [M(G.foot), M(G.foot)],
+      chin: M(G.chin), thumb: [M(G.thumb), M(G.thumb)], hipj: [M(G.hipj), M(G.hipj)], ankle: [M(G.ankle), M(G.ankle)],
     };
     // equipment
     const props = { hold: [] };
@@ -199,6 +201,10 @@
     blobAt(P.pelvis, V(J.hip, 0).addScaledVector(torsoDir, 2), torsoDir);
     const nd = place(P.neck, V(J.sho, 0).addScaledVector(torsoDir, -3), V(J.neck, 0));
     blobAt(P.head, V(J.head, 0), nd);
+    { // jaw: forward and down from the head centre, so the head reads as facing somewhere
+      const fwd = new T.Vector3(nd.y, -nd.x, 0);
+      blobAt(P.chin, V(J.head, 0).addScaledVector(nd, -4.2).addScaledVector(fwd, 2.6), nd);
+    }
     for (let i = 0; i < 2; i++) {
       const sgn = i === 0 ? 1 : -1;
       const sho = V(J.sho, sgn * SHO_Z).addScaledVector(torsoDir, -5);
@@ -209,15 +215,18 @@
       blobAt(P.elbow[i], elb);
       const fd = place(P.fa[i], elb, hand);
       blobAt(P.hand[i], hand.clone().addScaledVector(fd, 2.5), fd);
+      blobAt(P.thumb[i], hand.clone().addScaledVector(fd, 1.2).add(new T.Vector3(fd.y * 2.2, -fd.x * 2.2, -sgn * 1.6)), fd);
       if (props.hold[i]) { props.hold[i].position.copy(hand).addScaledVector(fd, 2.5); props.hold[i].rotation.set(0, 0, Math.atan2(fd.y, fd.x)); }
       if (props.rope) { const r = props.rope[i]; r.position.copy(hand).add(new T.Vector3(0, -6, sgn * 1.5)); }
       const hip = V(J.hip, sgn * HIP_Z);
       const knee = V(i ? J.knee1 : J.knee0, sgn * HIP_Z);
       const ank = V(i ? J.ankle1 : J.ankle0, sgn * HIP_Z);
       place(P.th[i], hip, knee);
+      blobAt(P.hipj[i], hip.clone().addScaledVector(torsoDir, 1.5), torsoDir);
       blobAt(P.knee[i], knee);
       place(P.sh[i], knee, ank);
-      P.foot[i].position.copy(ank).add(new T.Vector3(5, -2.2, 0));
+      blobAt(P.ankle[i], ank);
+      P.foot[i].position.copy(ank).add(new T.Vector3(4.6, -2.4, 0));
       P.foot[i].quaternion.identity();
     }
     if (props.handle) props.handle.position.copy(V(J.hand0, 0)).add(new T.Vector3(2, 0, 0));
@@ -254,7 +263,8 @@
     return hero;
   }
   function mount(el, id) {
-    if (!has(id) || !el) return;
+    if (!has(id) || !el || el._mounted) return;
+    el._mounted = true;
     load().then(() => {
       const h = heroRenderer();
       const s = build(id);
@@ -293,7 +303,7 @@
         thumbs[id] = r.domElement.toDataURL('image/png');
       }
       r.dispose(); r.forceContextLoss();
-      try { localStorage.setItem('gfj.figthumbs.v1', JSON.stringify(thumbs)); } catch (e) {}
+      try { localStorage.setItem('gfj.figthumbs.v2', JSON.stringify(thumbs)); } catch (e) {}
       return true;
     });
   }
