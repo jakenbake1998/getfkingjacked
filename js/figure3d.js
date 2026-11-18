@@ -18,7 +18,7 @@
   const has = (id) => !!getDef(id);
   let T = null, loading = null, failed = false;
   const thumbs = {};
-  try { Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v5') || '{}')); } catch (e) {}
+  try { localStorage.removeItem('gfj.figthumbs.v5'); Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v6') || '{}')); } catch (e) {}
 
   // The real 3D Jake (models/jake.glb, rigged), loaded only when that figure style is on. J3 = false if it failed.
   let J3 = null, j3loading = null;
@@ -434,7 +434,7 @@
     const skey = style + '|' + id;
     if (scenes[skey]) return scenes[skey];
     const def = getDef(id);
-    const tg = targetsFor(id, def);
+    const tg = {}; // v3.4: no muscle glow on the moving figure; the Target tab's front/back map shows what's worked
     const scene = new T.Scene();
     const j3 = style === 'jake3d' && !!J3; // falls back to the drawn Jake if the model didn't load
     const jake = style === 'jake' || style === 'jake3d';
@@ -444,10 +444,12 @@
     const steel = new T.MeshStandardMaterial({ color: 0xa3acb6, roughness: 0.28, metalness: 0.85 });
     const iron = new T.MeshStandardMaterial({ color: 0x1d2227, roughness: 0.45, metalness: 0.5 });
     // the 3D model gets neutral light (the blue sky/rim light suited the grey mannequin but tinted his clothes blue)
-    scene.add(j3 ? new T.HemisphereLight(0xffffff, 0x2a2622, 1.0) : new T.HemisphereLight(0xdde7ff, 0x15181c, 1.1));
-    const key = new T.DirectionalLight(j3 ? 0xfff6ec : 0xffffff, j3 ? 2.4 : 2.6); key.position.set(80, 160, 140); scene.add(key);
-    const rim = new T.DirectionalLight(j3 ? 0xffffff : 0x8fb0ff, j3 ? 0.7 : 1.8); rim.position.set(-120, 60, -100); scene.add(rim);
-    const fill = new T.DirectionalLight(0xffe2c8, j3 ? 0.5 : 0.6); fill.position.set(60, -40, 120); scene.add(fill);
+    // v3.4: brighter, more frontal light on the model (he read dim: black shorts on a dark background, mostly side-lit)
+    scene.add(j3 ? new T.HemisphereLight(0xffffff, 0x4a443e, 1.7) : new T.HemisphereLight(0xdde7ff, 0x15181c, 1.1));
+    const key = new T.DirectionalLight(j3 ? 0xfff6ec : 0xffffff, j3 ? 2.6 : 2.6); key.position.set(80, 160, 140); scene.add(key);
+    const rim = new T.DirectionalLight(j3 ? 0xffffff : 0x8fb0ff, j3 ? 1.0 : 1.8); rim.position.set(-120, 60, -100); scene.add(rim);
+    const fill = new T.DirectionalLight(0xffe2c8, j3 ? 1.0 : 0.6); fill.position.set(60, -40, 120); scene.add(fill);
+    if (j3) { const f2 = new T.DirectionalLight(0xffffff, 0.8); f2.position.set(-60, 40, 160); scene.add(f2); const f3 = new T.DirectionalLight(0xffffff, 0.6); f3.position.set(160, 20, -40); scene.add(f3); }
 
     const torsoW = (t, front) => [0.66 * (front && t > 0.55 && t < 0.98 ? 1.14 : 1), 0.95 + 0.62 * sstep(0.22, 0.86, t)];
     // colours: grey everywhere (classic), or Jake's skin/clothes
@@ -485,13 +487,10 @@
       P.hand = hands; P.grip = grip;
     }
     let j3s = null;
-    if (j3) { // the real model: a skinned copy for this scene, with the worked muscles painted in as glow
+    if (j3) { // the real model: a skinned copy for this scene, clean (no glow)
       const root = J3.SU.clone(J3.scene); scene.add(root); root.updateMatrixWorld(true);
       let sm = null; root.traverse((o) => { if (o.isSkinnedMesh && !sm) sm = o; });
       sm.frustumCulled = false;
-      const geo = sm.geometry.clone(), n = geo.attributes.position.count, gl = new Float32Array(n * 3);
-      for (let i = 0; i < n; i++) { const lv = tg[REG[J3.region[i]]]; const c = lv === 1 ? GLOW_R : lv === 2 ? GLOW_O : null; if (c) { gl[i * 3] = c[0]; gl[i * 3 + 1] = c[1]; gl[i * 3 + 2] = c[2]; } }
-      geo.setAttribute('glowc', new T.BufferAttribute(gl, 3)); sm.geometry = geo;
       const mm = new T.MeshStandardMaterial({ map: sm.material.map, roughness: 0.85, metalness: 0 });
       mm.onBeforeCompile = (sh) => { // worked muscles: the texture is tinted red/orange, with a little glow on top
         sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 glowc;\nvarying vec3 vGlow;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glowc;');
@@ -561,12 +560,20 @@
     }
     if (def.dips) { const y = def.dips.y, x = A.J.mid.x; for (const z of [-26, 26]) { const b = cyl(2, 60, steel); b.rotation.z = Math.PI / 2; b.position.set(x + 8, -y, z); scene.add(b); box(4, FLOOR - y, 4, x - 18, (y + FLOOR) / 2, z, iron); box(4, FLOOR - y, 4, x + 34, (y + FLOOR) / 2, z, iron); } }
     if (def.mat) { const m = new T.Mesh(new T.BoxGeometry(def.mat[1] - def.mat[0], 1.2, 46), new T.MeshStandardMaterial({ color: 0x2c3a42, roughness: 0.9 })); m.position.set((def.mat[0] + def.mat[1]) / 2, -FLOOR + 0.6, 0); scene.add(m); }
+    // handles: hands together share one handle; hands apart get one each (both, if the arms move as a pair)
+    const symArms = ['a', 'b'].every((k) => !def[k] || ((!def[k].ua || def[k].ua[0] === def[k].ua[1]) && (!def[k].abd || def[k].abd[0] === def[k].abd[1])));
+    const sepHandles = def.hold === 'handle' && def.handsZ == null;
+    const twoCables = sepHandles && symArms && def.cable && def.cable[2];
+    const strand = (r, m) => { const o = new T.Mesh(new T.CylinderGeometry(r, r, 1, 10).translate(0, 0.5, 0), m); scene.add(o); return o; };
     if (def.cable) {
-      const c = def.cable, cz = c[2] || 0;
-      const colX = c[0] + (c[0] < 100 ? -8 : 8);
-      box(12, FLOOR - 4, 16, cz ? c[0] : colX, FLOOR / 2 + 2, cz ? cz + Math.sign(cz) * 8 : 0);
-      const pul = cyl(3.6, 3, steel, 20); pul.rotation.x = Math.PI / 2; pul.position.set(c[0], -c[1], cz); scene.add(pul);
-      props.cable = new T.Mesh(new T.CylinderGeometry(0.55, 0.55, 1, 8).translate(0, 0.5, 0), steel); scene.add(props.cable);
+      const c = def.cable;
+      for (const cz of twoCables ? [c[2], -c[2]] : [c[2] || 0]) {
+        const colX = c[0] + (c[0] < 100 ? -8 : 8);
+        box(12, FLOOR - 4, 16, cz ? c[0] : colX, FLOOR / 2 + 2, cz ? cz + Math.sign(cz) * 8 : 0);
+        const pul = cyl(3.6, 3, steel, 20); pul.rotation.x = Math.PI / 2; pul.position.set(c[0], -c[1], cz); scene.add(pul);
+      }
+      props.cable = strand(0.55, steel);
+      if (twoCables) props.cable2 = strand(0.55, steel);
     }
     const dumbbell = (vertical) => { const g = new T.Group(); const h = cyl(1.5, 13, steel, 12); h.rotation.x = Math.PI / 2; g.add(h); for (const z of [-6.5, 6.5]) { const p = cyl(6.2, 3.6, iron, 24); p.rotation.x = Math.PI / 2; p.position.z = z; g.add(p); } if (vertical) g.rotation.x = Math.PI / 2; scene.add(g); return g; };
     const kettlebell = () => { const g = new T.Group(); const b = new T.Mesh(new T.SphereGeometry(6.5, 24, 18), iron); b.position.y = -8; g.add(b); const hnd = new T.Mesh(new T.TorusGeometry(3.6, 1.1, 10, 24, Math.PI), iron); hnd.position.y = -2.4; g.add(hnd); scene.add(g); return g; };
@@ -585,8 +592,14 @@
     else if (h === 'hipdb') props.hipdb = dumbbell();
     else if (h === 'landmine') { props.land = cyl(1.4, 1, steel, 10).translateY(0); props.land.geometry.translate(0, 0.5, 0); scene.add(props.land); const pl = cyl(17, 4.5, iron, 28); props.landPlate = pl; scene.add(pl); }
     else if (h === 'wheel') { const w = cyl(9, 5, iron, 30); w.rotation.x = Math.PI / 2; props.mid = w; scene.add(w); }
-    if (h === 'rope') { const rm = new T.MeshStandardMaterial({ color: 0xd8b25a, roughness: 0.8 }); props.rope = [new T.Mesh(new T.CylinderGeometry(1.4, 1.4, 12, 10), rm), new T.Mesh(new T.CylinderGeometry(1.4, 1.4, 12, 10), rm)]; props.rope.forEach((r) => scene.add(r)); }
-    if (h === 'handle') { props.handle = cyl(1.6, 12, iron, 12); props.handle.rotation.x = Math.PI / 2; scene.add(props.handle); }
+    if (h === 'rope') { // a knot on the cable, two strands running through the fists, a bead on each end
+      const rm = new T.MeshStandardMaterial({ color: 0xd8b25a, roughness: 0.8 });
+      const ball = (r) => { const o = new T.Mesh(new T.SphereGeometry(r, 12, 10), rm); scene.add(o); return o; };
+      props.rope = { strands: [strand(1.3, rm), strand(1.3, rm)], knot: ball(2.3), ends: [ball(2), ball(2)] };
+    }
+    if (h === 'handle' && !sepHandles) { props.handle = cyl(1.6, 12, iron, 12); props.handle.rotation.x = Math.PI / 2; scene.add(props.handle); }
+    if (sepHandles) { const hd = () => { const o = cyl(1.6, 11, iron, 12); scene.add(o); return o; }; props.hand2 = [hd(), symArms ? hd() : null]; }
+    if (def.band) { const bm = new T.MeshStandardMaterial({ color: 0x3f7fd0, roughness: 0.7 }); props.band = [strand(1.1, bm), strand(1.1, bm), strand(1.1, bm)]; }
     // soft contact shadow
     const cv = document.createElement('canvas'); cv.width = cv.height = 64;
     const cx2 = cv.getContext('2d'); const gr = cx2.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -662,6 +675,8 @@
         // the fist (grip centre) sits on the hand joint, where the bar or handle is
         const HS = 1.65, gx = P.grip === 'open' ? 0.2 : 1.5, gy = P.grip === 'open' ? 3.4 : 4.9;
         hgp.position.copy(W3(add(add(hand, fd, -gy * HS), palm, -gx * HS)));
+        (s.gz || (s.gz = []))[i] = Zw.clone(); // grip axis: whatever the hand holds runs across the palm
+        if (props.hand2 && props.hand2[i]) { props.hand2[i].quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), Zw); props.hand2[i].position.copy(W3(hand)); }
       }
       const hj = J['hipj' + i], knee = J['knee' + i], ank = J['ankle' + i];
       place(P.th[i], hj, knee, F['th' + i], -1);
@@ -677,9 +692,8 @@
       if (props.hold[i]) {
         const g = props.hold[i];
         g.position.copy(W3(hand));
-        if (def.hold === 'kb' || def.hold === 'kb1') g.quaternion.identity(); else g.rotation.set(0, 0, Math.atan2(-fd.y, fd.x));
+        if (def.hold === 'kb' || def.hold === 'kb1') g.quaternion.identity(); else g.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), s.gz[i]); // v3.4: dumbbell handle in line with the grip (was always side-to-side)
       }
-      if (props.rope) props.rope[i].position.copy(W3(add(hand, v3(0, 6, i ? -1.5 : 1.5))));
     }
     if (s.honest) {
       // A chain of 8 points on springs (Verlet): gravity pulls each one, the base leads and the rest lags,
@@ -732,13 +746,24 @@
     if (props.hipdb) props.hipdb.position.copy(W3(add(J.hip, F.torso, 14)));
     if (props.handle) props.handle.position.copy(W3(J.mid));
     if (props.land) { const piv = v3(def.landPivot ? def.landPivot[0] : 20, FLOOR - 2, 0); const tip = add(J.hand0, nrm(sub(J.hand0, J.elb0)), 2); place(props.land, piv, tip); props.land.scale.set(1, len3(sub(tip, piv)), 1); const d = nrm(sub(tip, piv)); props.landPlate.position.copy(W3(add(piv, d, 10))); place(props.landPlate, add(piv, d, 8), add(piv, d, 12)); props.landPlate.position.copy(W3(add(piv, d, 10))); }
+    const seg = (o, a, b) => { place(o, a, b); o.scale.set(1, Math.max(0.01, len3(sub(b, a))), 1); };
+    let knot = null;
+    if (props.rope) { // the knot sits a little up the cable from the hands; each strand runs from it through a fist
+      const R = props.rope, c = def.cable, A = c ? v3(c[0], c[1], c[2] || 0) : add(J.mid, v3(0, -20, 0));
+      knot = add(J.mid, nrm(sub(A, J.mid)), 9 + 0.25 * len3(sub(J.hand0, J.hand1))); // hands spread wide → the rope opens into a V
+      R.knot.position.copy(W3(knot));
+      [J.hand0, J.hand1].forEach((hd, i) => { const end = add(hd, nrm(sub(hd, knot)), 4); seg(R.strands[i], knot, end); R.ends[i].position.copy(W3(end)); });
+    }
+    if (props.band) { // loop band: from one hand, around the upper back, to the other
+      const b0 = add(add(J.sho0, F.torso, -9), tdir, -4), b1 = add(add(J.sho1, F.torso, -9), tdir, -4);
+      seg(props.band[0], J.hand0, b0); seg(props.band[1], b0, b1); seg(props.band[2], b1, J.hand1);
+    }
     if (props.cable) {
       const c = def.cable, A = v3(c[0], c[1], c[2] || 0);
       const to = def.cableTo || 'hand0';
-      let Hh = to === 'kneeback' ? add(J.knee0, F.th0, -6) : J[to] || J.hand0; // kneeback: strap around the back of the knee
-      if (to === 'hand0' && def.handsZ == null && !def.cable[2]) Hh = J.hand0;
-      place(props.cable, A, Hh);
-      props.cable.scale.set(1, len3(sub(Hh, A)), 1);
+      let Hh = knot || (to === 'kneeback' ? add(J.knee0, F.th0, -6) : J[to] || J.hand0); // kneeback: strap around the back of the knee
+      seg(props.cable, A, Hh);
+      if (props.cable2) seg(props.cable2, v3(c[0], c[1], -(c[2] || 0)), J.hand1);
     }
   }
 
@@ -840,7 +865,7 @@
     load().then(() => {
       let n = 0;
       for (const id of [...want]) { thumbs[figStyle() + '|' + id] = snap(id, 1, 128); want.delete(id); if (!hero || hero.id !== id) dispose(id); if (++n >= 6) break; }
-      try { localStorage.setItem('gfj.figthumbs.v5', JSON.stringify(thumbs)); } catch (e) {}
+      try { localStorage.setItem('gfj.figthumbs.v6', JSON.stringify(thumbs)); } catch (e) {}
       window.dispatchEvent(new Event('figthumbs'));
       if (want.size) thumbJob = setTimeout(runThumbs, 60);
     }).catch(() => {});

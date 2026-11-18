@@ -372,7 +372,7 @@
         <div class="seg seg3">${tabs.map((t, k) => `<button class="${d.tab === k ? 'on' : ''}" data-act="dtab" data-k="${k}">${t}</button>`).join('')}</div>
         <div class="howto-scroll">
         ${d.tab === 0 ? `<ol class="steps-list">${(inf.steps.length ? inf.steps : ['Move slowly and with control through the full range you can do without pain.']).map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` : ''}
-        ${d.tab === 1 ? `<div class="target"><div class="tlegend"><span><i class="lg p"></i>Main: ${esc((inf.m.length ? inf.m : [ex.group]).map(cap).join(', '))}</span>${inf.s.length ? `<span><i class="lg s"></i>Also: ${esc(inf.s.map(cap).join(', '))}</span>` : ''}</div></div>` : ''}
+        ${d.tab === 1 ? `<div class="target">${(() => { const pt = (window.Figure && Figure.defs && Figure.defs[it.ex] && Figure.defs[it.ex].target) || {}; const mm = (inf.m.length ? inf.m : [ex.group]).concat(Object.keys(pt).filter((k) => pt[k] === 1)); const ss = inf.s.concat(Object.keys(pt).filter((k) => pt[k] === 2)); return muscleMap(mm, ss); })()}<div class="tlegend"><span><i class="lg p"></i>Main: ${esc((inf.m.length ? inf.m : [ex.group]).map(cap).join(', '))}</span>${inf.s.length ? `<span><i class="lg s"></i>Also: ${esc(inf.s.map(cap).join(', '))}</span>` : ''}</div></div>` : ''}
         ${d.tab === 2 ? `<ul class="eq-list">${eqNames.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
         </div></div>`;
     } else if (d.view === 'history') {
@@ -423,45 +423,68 @@
     }
   }
 
-  // Simple front and back body map. Muscle names follow the exercise library.
-  const REG = {
-    front: {
-      shoulders: ['M38 46a10 9 0 1 0 0 .1', 'M82 46a10 9 0 1 0 0 .1'],
-      chest: ['M45 52h14v16h-14z', 'M61 52h14v16h-14z'],
-      biceps: ['M30 58h9v20h-9z', 'M81 58h9v20h-9z'],
-      forearms: ['M27 82h9v22h-9z', 'M84 82h9v22h-9z'],
-      abdominals: ['M50 70h20v30h-20z'],
-      quadriceps: ['M44 112h14v38h-14z', 'M62 112h14v38h-14z'],
-      adductors: ['M57 112h6v26h-6z'],
-      abductors: ['M40 108h5v16h-5z', 'M75 108h5v16h-5z'],
-      calves: ['M46 160h10v30h-10z', 'M64 160h10v30h-10z'],
-      cardio: ['M52 54h16v12h-16z'],
-    },
-    back: {
-      traps: ['M48 40h24v10h-24z'],
-      shoulders: ['M38 46a10 9 0 1 0 0 .1', 'M82 46a10 9 0 1 0 0 .1'],
-      lats: ['M44 60h10v24h-10z', 'M66 60h10v24h-10z'],
-      'middle back': ['M54 54h12v20h-12z'],
-      'lower back': ['M52 80h16v14h-16z'],
-      triceps: ['M30 58h9v20h-9z', 'M81 58h9v20h-9z'],
-      glutes: ['M45 100h14v16h-14z', 'M61 100h14v16h-14z'],
-      hamstrings: ['M44 120h14v32h-14z', 'M62 120h14v32h-14z'],
-      calves: ['M46 160h10v30h-10z', 'M64 160h10v30h-10z'],
-    },
-  };
-  const ALIAS = { chest: 'chest', back: 'lats', core: 'abdominals', quads: 'quadriceps', glutes: 'glutes', hamstrings: 'hamstrings', other: '' };
+  // Front and back anatomy map. Muscle names follow the exercise library.
+  // Each shape is drawn once for the figure's left half and mirrored; points are smoothed into curves.
+  const MM = (() => {
+    const sm = (pts, closed) => { // Catmull-Rom through the points → cubic Béziers
+      const n = pts.length, P = (i) => pts[closed ? (i + n) % n : Math.max(0, Math.min(n - 1, i))];
+      let d = `M${pts[0][0]} ${pts[0][1]}`;
+      for (let i = 0; i < (closed ? n : n - 1); i++) {
+        const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+        const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+        d += `C${c1[0].toFixed(1)} ${c1[1].toFixed(1)} ${c2[0].toFixed(1)} ${c2[1].toFixed(1)} ${p2[0]} ${p2[1]}`;
+      }
+      return d + (closed ? 'Z' : '');
+    };
+    const mir = (pts) => pts.map(([x, y]) => [120 - x, y]);
+    const pair = (pts) => [sm(pts, true), sm(mir(pts), true)];
+    // body silhouette, left half from the neck down to the crotch
+    const half = [[54, 33], [53, 39], [44, 42], [36, 45], [31, 51], [29, 60], [28, 72], [27, 86], [25, 100], [23, 116], [21, 126], [23, 134], [27, 133], [29, 122], [31, 106], [34, 90], [36, 76], [39, 66], [40, 80], [42, 96], [40, 110], [39, 128], [40, 150], [43, 170], [41, 188], [43, 212], [46, 232], [43, 240], [54, 242], [54, 232], [54, 210], [55, 188], [56, 170], [57, 146], [60, 130]];
+    const body = sm(half.concat(mir(half).reverse().slice(1)), true);
+    const F = {
+      shoulders: pair([[33, 50], [39, 45], [44, 48], [41, 58], [35, 64], [31, 58]]),
+      chest: pair([[45, 47], [58, 48], [58, 63], [51, 67], [43, 63], [41, 55]]),
+      traps: pair([[47, 40], [54, 37], [55, 42], [45, 45]]),
+      biceps: pair([[33, 66], [38, 66], [38, 80], [34, 87], [30, 81], [30, 71]]),
+      forearms: pair([[28, 91], [34, 91], [33, 104], [29, 117], [25, 115], [25, 101]]),
+      abdominals: [sm([[53, 68], [67, 68], [67, 88], [65, 104], [60, 112], [55, 104], [53, 88]], true)],
+      obliques: pair([[43, 69], [51, 71], [52, 98], [47, 106], [43, 92], [42, 80]]),
+      abductors: pair([[39, 106], [44, 108], [43, 122], [39, 121]]),
+      quadriceps: pair([[43, 112], [52, 116], [56, 138], [54, 164], [47, 168], [42, 150], [40, 128]]),
+      adductors: pair([[54, 121], [59, 130], [58, 146], [56, 139]]),
+      calves: pair([[42, 182], [47, 179], [49, 200], [46, 220], [42, 204]]),
+    };
+    const B = {
+      traps: [sm([[60, 33], [68, 38], [79, 45], [67, 52], [60, 74], [53, 52], [41, 45], [52, 38]], true)],
+      shoulders: pair([[32, 53], [38, 46], [44, 50], [41, 60], [34, 63]]),
+      triceps: pair([[31, 64], [37, 64], [38, 82], [34, 88], [30, 80]]),
+      forearms: F.forearms,
+      'middle back': pair([[51, 52], [58, 55], [58, 76], [52, 72], [49, 62]]),
+      lats: pair([[42, 60], [52, 66], [56, 90], [49, 99], [44, 88], [40, 72]]),
+      obliques: pair([[40, 86], [44, 88], [44, 102], [40, 100]]),
+      'lower back': pair([[54, 88], [59, 88], [59, 106], [53, 106]]),
+      abductors: pair([[39, 104], [42, 106], [41, 118], [39, 116]]),
+      glutes: pair([[43, 105], [58, 107], [59, 126], [50, 131], [42, 125], [40, 114]]),
+      hamstrings: pair([[42, 131], [52, 133], [56, 158], [53, 168], [46, 168], [42, 150]]),
+      adductors: pair([[54, 129], [59, 131], [57, 150]]),
+      calves: pair([[42, 176], [48, 173], [53, 184], [52, 206], [46, 216], [41, 200]]),
+    };
+    // a few contour lines so the idle muscles read as anatomy
+    const linesF = [sm([[60, 48], [60, 66]]), sm([[54, 79], [66, 79]]), sm([[54, 90], [66, 90]]), sm([[60, 70], [60, 106]])];
+    const linesB = [sm([[60, 36], [60, 108]])];
+    return { body, F, B, linesF, linesB };
+  })();
+  const ALIAS = { chest: 'chest', back: 'lats', core: 'abdominals', abs: 'abdominals', quads: 'quadriceps', glutes: 'glutes', hamstrings: 'hamstrings', other: '' };
   function muscleMap(main, sec) {
     const norm = (m) => ALIAS[m] != null ? ALIAS[m] : m;
-    const P = new Set(main.map(norm)), Sx = new Set((sec || []).map(norm));
+    const P = new Set(main.map(norm)), Sx = new Set((sec || []).map(norm).filter((m) => !P.has(m)));
     const fig = (side, dx) => {
-      const base = `<g transform="translate(${dx} 0)"><circle cx="60" cy="22" r="11" class="mb"/><path class="mb" d="M40 38h40l8 12 4 54h-10l-4-40-2 40h-4l2 56 2 40h-14l-4-40-2-30-2 30-4 40h-14l2-40 2-56h-4l-2-40-4 40H28l4-54z"/>`;
-      const regs = Object.keys(REG[side]).map((m) => {
-        const cls = P.has(m) ? 'mp' : Sx.has(m) ? 'ms' : 'mo';
-        return REG[side][m].map((d) => `<path class="${cls}" d="${d}"/>`).join('');
-      }).join('');
-      return base + regs + `<text x="60" y="206" class="mlab">${side === 'front' ? 'Front' : 'Back'}</text></g>`;
+      const R = side === 'front' ? MM.F : MM.B, lines = side === 'front' ? MM.linesF : MM.linesB;
+      const head = `<ellipse cx="60" cy="20" rx="10.5" ry="12.5" class="mb"/>`;
+      const regs = Object.keys(R).map((m) => { const cls = P.has(m) ? 'mp' : Sx.has(m) ? 'ms' : 'mo'; return R[m].map((d) => `<path class="${cls}" d="${d}"/>`).join(''); }).join('');
+      return `<g transform="translate(${dx} 0)">${head}<path class="mb" d="${MM.body}"/>${regs}${lines.map((d) => `<path class="ml" d="${d}"/>`).join('')}<text x="60" y="258" class="mlab">${side === 'front' ? 'Front' : 'Back'}</text></g>`;
     };
-    return `<svg class="mmap" viewBox="0 0 240 212" role="img" aria-label="Muscles worked">${fig('front', 0)}${fig('back', 120)}</svg>`;
+    return `<svg class="mmap" viewBox="0 0 240 264" role="img" aria-label="Muscles worked">${fig('front', 0)}${fig('back', 120)}</svg>`;
   }
 
   // ---------------- timer ----------------

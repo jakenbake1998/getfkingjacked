@@ -38,7 +38,7 @@
   copy('db_bo_row', 'bb_row', { hold: 'db', handsZ: 22 });
   add('seated_cable_row', { root: 'hip', at: [92, 144], box: { x0: 70, x1: 112, top: 156 }, cable: [196, 160], cableTo: 'mid', hold: 'handle', handsZ: 5,
     a: { t: 22, hd: -6, ua: [82, 82], fa: [86, 86], th: [80, 80], sh: [60, 60] },
-    b: { t: -8, hd: 0, ua: [-38, -38], fa: [84, 84], th: [80, 80], sh: [60, 60] } });
+    b: { t: -6, hd: 0, ua: [-24, -24], fa: [84, 84], th: [80, 80], sh: [60, 60] } }); // v3.4: handle finishes at the belly, not inside it
   add('sa_cable_row', standing({ cable: [196, 92], hold: 'handle', handsZ: null,
     a: { t: 14, tw: 18, ua: [84, 4], fa: [88, 2], th: [10, -14], sh: [-6, 6] },
     b: { t: 10, tw: -16, ua: [-36, 4], fa: [78, 2], th: [10, -14], sh: [-6, 6] } }));
@@ -196,7 +196,7 @@
   // ---------------- quads ----------------
   const squat = (hold, hz, arms, over) => Object.assign(standing({ hold, handsZ: hz }), {
     a: Object.assign({ t: 4, th: [0, 0], sh: [0, 0] }, arms.a), b: Object.assign({ t: 30, hd: -10, th: [78, 78], sh: [-30, -30] }, arms.b) }, over);
-  const goblet = { a: { ua: [-14, -14], fa: [150, 150] }, b: { ua: [-4, -4], fa: [160, 160] } };
+  const goblet = { a: { ua: [4, 4], fa: [142, 142] }, b: { ua: [-22, -22], fa: [116, 116] } }; // v3.4: bell held off the chest (the 3D model's chest is deeper than the drawn one)
   add('goblet_squat', squat('kbmid', 4, goblet));
   add('db_goblet_squat', squat('goblet', 4, goblet));
   add('box_goblet_squat', squat('kbmid', 4, goblet, { box: { at: 'hip', pose: 'b', dx: -6 } }));
@@ -221,8 +221,9 @@
   // Terminal knee extension: cable anchored in front at knee height, looped behind the working knee.
   // Stand on that foot, other foot back on its toes; push the knee back from slightly bent to locked straight.
   add('tke', standing({ cable: [178, 146], cableTo: 'kneeback', target: { quadriceps: 1 }, ground: ['ankle0'], cam: [0.25, 0.2, 0.95], period: 2200,
-    a: { t: 6, ua: [-24, -24], abd: [34, 34], fa: [72, 72], fabd: [-34, -34], th: [34, -12], sh: [-30, -46] },
-    b: { t: 2, ua: [-24, -24], abd: [34, 34], fa: [72, 72], fabd: [-34, -34], th: [-3, -12], sh: [2, -46] } }));
+    // v3.4: hands on hips; a short range (about 30° of knee bend to locked) so the hips barely move and it reads as a knee lock-out
+    a: { t: 4, ua: [-8, -8], abd: [30, 30], fa: [10, 10], fabd: [-50, -50], th: [16, -12], sh: [-14, -46] },
+    b: { t: 2, ua: [-8, -8], abd: [30, 30], fa: [10, 10], fabd: [-50, -50], th: [-3, -12], sh: [2, -46] } }));
   add('db_thruster', standing({ hold: 'db', handsZ: 21,
     a: { t: 28, hd: -10, ua: [20, 20], fa: [168, 168], th: [78, 78], sh: [-30, -30] },
     b: { t: 0, ua: [178, 178], fa: [178, 178], th: [0, 0], sh: [0, 0] } }));
@@ -278,7 +279,7 @@
     a: Object.assign({ t: 0, th: [0, 0], sh: [0, 0] }, arms), b: Object.assign({ t: 76, hd: -10, th: [14, 14], sh: [-6, -6] }, arms) });
   add('fb_goodmorning', gm('backbar', back3.a));
   add('fb_stiffleggedbarbellgoodmorning', gm('backbar', back3.a));
-  add('fb_dumbbellgoodmorning', gm('goblet', { ua: [-14, -14], fa: [150, 150] }));
+  add('fb_dumbbellgoodmorning', gm('goblet', { ua: [8, 8], fa: [146, 146] })); D.fb_dumbbellgoodmorning.b = Object.assign({}, D.fb_dumbbellgoodmorning.b, { ua: [-68, -68], fa: [70, 70] });
   add('fb_barbellshrug', standing({ hold: 'bar', handsZ: 22, target: { traps: 1, forearms: 2 }, cam: [-0.35, 0.4, 0.85], period: 1800,
     a: { t: 0, ua: [2, 2], fa: [0, 0], shrug: 0 }, b: { t: 0, ua: [2, 2], fa: [0, 0], shrug: 6 } }));
   add('fb_uprightrow', standing({ hold: 'bar', handsZ: 8, target: { shoulders: 1, traps: 1, biceps: 2 }, cam: FRONTCAM,
@@ -295,7 +296,7 @@
     b: { t: -80, ua: [-30, -30], fa: [160, 160], abd: [30, 30], th: [100, 100], sh: [100, 100] } };
   add('fb_australianchinup', invRow);
   add('fb_trxrow', Object.assign({}, invRow, { handsZ: 6 }));
-  add('fb_loopbandstandingchestpress', Object.assign({}, D.cable_press, { cable: null }));
+  add('fb_loopbandstandingchestpress', Object.assign({}, D.cable_press, { cable: null, band: true }));
   add('fb_burpee', standing({ target: { quadriceps: 1, chest: 2, abdominals: 2 }, period: 1600,
     a: { t: 0, ua: [170, 170], fa: [170, 170], th: [0, 0], sh: [0, 0], heel: 6 },
     b: { t: 80, hd: 8, ua: [0, 0], fa: [0, 0], th: [-80, -80], sh: [-80, -80], fit: [{ j: 'hand0', y: FL }, { j: 'ankle1', y: FL }] } }));
