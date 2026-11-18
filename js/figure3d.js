@@ -3,7 +3,19 @@
 // glow red on the body itself (painted into the mesh colours), helpers glow orange.
 (function () {
   const F = window.Figure;
-  const has = (id) => !!(F && F.defs[id]);
+  // Any exercise gets a figure: its own poses, or a stand-in from its muscle group (for lifts imported from other apps)
+  const FAMILY = { Chest: 'pushup', Back: 'bb_row', Shoulders: 'standing_db_press', Biceps: 'db_curl', Triceps: 'db_oh_ext', Quads: 'bw_squat', Hamstrings: 'db_rdl', Glutes: 'glute_bridge', Calves: 'db_calf_raise', Core: 'crunch', Other: 'bw_squat' };
+  function exOf(id) { return (window.EXERCISES || []).find((e) => e.id === id) || (window.Engine && Engine.S && Engine.exInfo(id)) || null; }
+  function getDef(id) {
+    if (F && F.defs[id]) return F.defs[id];
+    const ex = exOf(id);
+    if (!ex || !F) return null;
+    const base = F.defs[FAMILY[ex.group] || 'bw_squat'];
+    if (!base) return null;
+    const tgt = { Chest: { chest: 1 }, Back: { lats: 1 }, Shoulders: { shoulders: 1 }, Biceps: { biceps: 1 }, Triceps: { triceps: 1 }, Quads: { quadriceps: 1 }, Hamstrings: { hamstrings: 1 }, Glutes: { glutes: 1 }, Calves: { calves: 1 }, Core: { abdominals: 1 } }[ex.group] || { quadriceps: 1 };
+    return (F.defs[id] = Object.assign({}, base, { target: tgt }));
+  }
+  const has = (id) => !!getDef(id);
   let T = null, loading = null, failed = false;
   const thumbs = {};
   try { Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v3') || '{}')); } catch (e) {}
@@ -106,7 +118,7 @@
       (inf.s || []).forEach((m) => { if (MUSCLE_MAP[m]) tg[MUSCLE_MAP[m]] = 2; });
       inf.m.forEach((m) => { if (MUSCLE_MAP[m]) tg[MUSCLE_MAP[m]] = 1; });
     }
-    const ex = (window.EXERCISES || []).find((e) => e.id === id);
+    const ex = exOf(id);
     if (ex && GROUP_MAP[ex.group]) GROUP_MAP[ex.group].forEach((m) => (tg[m] = 1));
     return tg;
   }
@@ -154,7 +166,7 @@
     const handsZ = def.handsZ;
     for (let i = 0; i < 2; i++) {
       const sg = i === 0 ? 1 : -1;
-      const sho = add(add(J.sho, lat, sg * SHO_Z), T, -5);
+      const sho = add(add(J.sho, lat, sg * SHO_Z), T, -5 + (p.shrug || 0));
       let du = limb(ua[i], abd[i], sg, true), df = limb(fa[i], fabd[i], sg, true);
       let elb = add(sho, du, L.ua), hand = add(elb, df, L.fa);
       if (handsZ != null && !p.abd) { // hands drawn in toward a shared grip
@@ -217,13 +229,13 @@
   function poseAt(def, s) {
     const o = {};
     const keys = new Set(Object.keys(def.a).concat(Object.keys(def.b || {})));
-    keys.forEach((k) => { const a = def.a[k], b = def.b && def.b[k] != null ? def.b[k] : a; o[k] = a == null ? b : lerp(a, b, s); });
+    keys.forEach((k) => { if (k === 'fit') return; const a = def.a[k], b = def.b && def.b[k] != null ? def.b[k] : a; o[k] = a == null ? b : lerp(a, b, s); });
     if (def.b && def.b.fit && s > 0.5) o.fit = def.b.fit; else if (def.a.fit) o.fit = def.a.fit;
     return o;
   }
   function build(id) {
     if (scenes[id]) return scenes[id];
-    const def = F.defs[id];
+    const def = getDef(id);
     const tg = targetsFor(id, def);
     const scene = new T.Scene();
     const mat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.36, metalness: 0.08 });

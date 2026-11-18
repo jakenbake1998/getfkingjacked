@@ -347,7 +347,7 @@
     const head = (title) => `<div class="dv-bar"><button class="dv-x" data-act="dview" data-v="main" aria-label="Back">${BACKICON}</button><span>${title}</span><span style="width:40px"></span></div>`;
     if (d.view === 'main') {
       const fig = window.Figure3D && Figure3D.has(it.ex) && !Figure3D.failed;
-      body = `<div class="hero ${fig ? 'figbg' : ''}">${fig ? `<div class="hero-fig" data-keep data-fig="${it.ex}" data-key="fig-${it.ex}"></div>` : inf.img ? `<img id="hero-img" src="${imgSrc(it.ex, 0)}" alt="${esc(ex.name)}">` : `<div class="hero-none">${muscleMap(inf.m.length ? inf.m : [ex.group.toLowerCase()], inf.s)}</div>`}
+      body = `<div class="hero ${fig ? 'figbg' : ''}">${fig ? `<div class="hero-fig" data-keep data-fig="${it.ex}" data-key="fig-${it.ex}"></div>` : inf.img ? `<img id="hero-img" src="${imgSrc(it.ex, 0)}" alt="${esc(ex.name)}">` : `<div class="hero-none"><span>${esc(ex.group)}</span></div>`}
           <button class="dv-close" data-act="${lib ? 'libback' : 'dclose'}" aria-label="${lib ? 'Back to exercises' : 'Close'}">${lib ? BACKICON : XICON}</button>
           <div class="hero-foot"><h2 class="hero-name">${esc(ex.name)}</h2><button class="howto-btn" data-act="dview" data-v="howto">▶ How-to</button></div></div>
         <div class="dchips">
@@ -372,7 +372,7 @@
         <div class="seg seg3">${tabs.map((t, k) => `<button class="${d.tab === k ? 'on' : ''}" data-act="dtab" data-k="${k}">${t}</button>`).join('')}</div>
         <div class="howto-scroll">
         ${d.tab === 0 ? `<ol class="steps-list">${(inf.steps.length ? inf.steps : ['Move slowly and with control through the full range you can do without pain.']).map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` : ''}
-        ${d.tab === 1 ? `<div class="target">${muscleMap(inf.m.length ? inf.m : [ex.group.toLowerCase()], inf.s)}<div class="tlegend"><span><i class="lg p"></i>Main: ${esc((inf.m.length ? inf.m : [ex.group]).map(cap).join(', '))}</span>${inf.s.length ? `<span><i class="lg s"></i>Also: ${esc(inf.s.map(cap).join(', '))}</span>` : ''}</div></div>` : ''}
+        ${d.tab === 1 ? `<div class="target"><div class="tlegend"><span><i class="lg p"></i>Main: ${esc((inf.m.length ? inf.m : [ex.group]).map(cap).join(', '))}</span>${inf.s.length ? `<span><i class="lg s"></i>Also: ${esc(inf.s.map(cap).join(', '))}</span>` : ''}</div></div>` : ''}
         ${d.tab === 2 ? `<ul class="eq-list">${eqNames.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
         </div></div>`;
     } else if (d.view === 'history') {
@@ -862,7 +862,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv,text/plain" hidden>
-      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.1</div>`;
+      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.2</div>`;
   }
 
 

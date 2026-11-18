@@ -254,4 +254,50 @@
   add('star_jump', standing({ cam: FRONTCAM, target: { quadriceps: 2, calves: 2, shoulders: 2 }, period: 1200,
     a: { ua: [4, 4], fa: [4, 4], abd: [6, 6], labd: [2, 2] },
     b: { ua: [4, 4], fa: [4, 4], abd: [150, 150], labd: [20, 20] } }));
+
+  // ---------------- lifts imported from Fitbod (custom ids "fb_" + name) ----------------
+  const back3 = { a: { ua: [-40, -40], abd: [55, 55], fa: [150, 150] } };
+  copy('fb_barbellinclinebenchpress', 'db_incline', { hold: 'bar', handsZ: 24 });
+  copy('fb_arnolddumbbellpress', 'db_shoulder_press', { a: { ua: [24, 24], abd: [8, 8], fa: [172, 172], fabd: [0, 0] } });
+  add('fb_deadlift', standing({ hold: 'bar', handsZ: 22, target: { hamstrings: 1, glutes: 1, 'lower back': 1, quadriceps: 2, traps: 2 }, cam: [0.45, 0.15, 0.88],
+    a: { t: 58, hd: -14, ua: [0, 0], fa: [0, 0], th: [58, 58], sh: [-22, -22] },
+    b: { t: 0, ua: [4, 4], fa: [2, 2], th: [0, 0], sh: [0, 0] } }));
+  copy('fb_sumodeadlift', 'fb_deadlift', { handsZ: 10, cam: FRONTCAM, a: { t: 42, th: [62, 62], labd: [28, 28] }, b: { labd: [24, 24] } });
+  add('fb_frontsquat', standing({ hold: 'bar', handsZ: 21, target: { quadriceps: 1, glutes: 2, abdominals: 2 },
+    a: { t: 2, ua: [74, 74], fa: [-176, -176], th: [0, 0], sh: [0, 0] },
+    b: { t: 16, hd: -6, ua: [80, 80], fa: [-178, -178], th: [80, 80], sh: [-30, -30] } }));
+  const gm = (hold, arms) => standing({ hold, handsZ: hold === 'goblet' ? 4 : null, target: { hamstrings: 1, 'lower back': 1, glutes: 2 }, cam: BACKCAM,
+    a: Object.assign({ t: 0, th: [0, 0], sh: [0, 0] }, arms), b: Object.assign({ t: 76, hd: -10, th: [14, 14], sh: [-6, -6] }, arms) });
+  add('fb_goodmorning', gm('backbar', back3.a));
+  add('fb_stiffleggedbarbellgoodmorning', gm('backbar', back3.a));
+  add('fb_dumbbellgoodmorning', gm('goblet', { ua: [-14, -14], fa: [150, 150] }));
+  add('fb_barbellshrug', standing({ hold: 'bar', handsZ: 22, target: { traps: 1, forearms: 2 }, cam: [-0.35, 0.4, 0.85], period: 1800,
+    a: { t: 0, ua: [2, 2], fa: [0, 0], shrug: 0 }, b: { t: 0, ua: [2, 2], fa: [0, 0], shrug: 6 } }));
+  add('fb_uprightrow', standing({ hold: 'bar', handsZ: 8, target: { shoulders: 1, traps: 1, biceps: 2 }, cam: FRONTCAM,
+    a: { t: 0, ua: [6, 6], fa: [4, 4], abd: [8, 8], fabd: [-6, -6] },
+    b: { t: 0, ua: [20, 20], fa: [168, 168], abd: [78, 78], fabd: [-30, -30] } }));
+  copy('fb_barbelllunge', 'reverse_lunge', { hold: 'backbar', handsZ: null, a: back3.a, b: Object.assign({}, D.reverse_lunge.b, back3.a) });
+  copy('fb_standingbarbellcalfraise', 'db_calf_raise', { hold: 'backbar', handsZ: null, a: Object.assign({ heel: 0 }, back3.a), b: Object.assign({ heel: 8 }, back3.a) });
+  copy('fb_declinepushup', 'pushup', { fit: [{ j: 'hand0', y: FL }, { j: 'ankle1', y: 140 }], bench: { at: 'ankle1', top: 140, w: 60 } });
+  copy('fb_diamondpushup', 'pushup', { handsZ: 6, target: { triceps: 1, chest: 2 }, b: { abd: [0, 0] } });
+  copy('fb_triceppushup', 'pushup', { handsZ: 14, target: { triceps: 1, chest: 2 }, b: { abd: [0, 0] } });
+  copy('fb_renegaderow', 'pushup', { hold: 'db', target: { lats: 1, abdominals: 2, biceps: 2 }, b: { t: 80, ua: [-44, 0], fa: [2, 0], abd: [0, 0], th: [-80, -80], sh: [-80, -80] } });
+  const invRow = { root: 'mid', at: [110, 112], pullbar: { y: 110, x: 110 }, fit: [{ j: 'mid', y: 112, pad: 0 }, { j: 'ankle1', y: FL }], target: { lats: 1, biceps: 2, 'middle back': 1 }, cam: [0.35, 0.2, 0.91],
+    a: { t: -72, ua: [174, 174], fa: [176, 176], th: [102, 102], sh: [102, 102] },
+    b: { t: -80, ua: [-30, -30], fa: [160, 160], abd: [30, 30], th: [100, 100], sh: [100, 100] } };
+  add('fb_australianchinup', invRow);
+  add('fb_trxrow', Object.assign({}, invRow, { handsZ: 6 }));
+  add('fb_loopbandstandingchestpress', Object.assign({}, D.cable_press, { cable: null }));
+  add('fb_burpee', standing({ target: { quadriceps: 1, chest: 2, abdominals: 2 }, period: 1600,
+    a: { t: 0, ua: [170, 170], fa: [170, 170], th: [0, 0], sh: [0, 0], heel: 6 },
+    b: { t: 80, hd: 8, ua: [0, 0], fa: [0, 0], th: [-80, -80], sh: [-80, -80], fit: [{ j: 'hand0', y: FL }, { j: 'ankle1', y: FL }] } }));
+  const jump = { box: { x0: 130, x1: 180, top: 146 }, target: { quadriceps: 1, glutes: 1, calves: 2 },
+    a: { t: 34, hd: -10, ua: [-40, -40], fa: [-20, -20], th: [74, 74], sh: [-30, -30] },
+    b: { t: 0, ua: [150, 150], fa: [160, 160], th: [6, 6], sh: [0, 0], heel: 10 } };
+  add('fb_boxjump', standing(jump));
+  add('fb_1stepboxjump', standing(jump));
+  add('fb_legpullin', { root: 'hip', at: [100, FL - 12], ground: ['hip'], mat: [20, 190], cam: [0.5, 0.25, 0.83], target: { abdominals: 1 },
+    a: { t: -50, ua: [-40, -40], fa: [-10, -10], th: [100, 100], sh: [96, 96] },
+    b: { t: -40, ua: [-40, -40], fa: [-10, -10], th: [150, 150], sh: [60, 60] } });
+  add('fb_situp', supine({ ua: [140, 140], fa: [-120, -120], th: [136, 132], sh: [22, 18] }, { t: -12, hd: -10, ua: [140, 140], fa: [-120, -120], th: [136, 132], sh: [22, 18] }, { target: { abdominals: 1 } }));
 })();
