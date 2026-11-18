@@ -247,9 +247,9 @@
     return { J, F, heel: p.heel || 0 };
   }
 
-  // Figure style: 'classic' grey mannequin or 'jake' (the intro character: tank, shorts, mustache, cel-shaded)
+  // Figure style: 'classic' grey mannequin or 'jake3d' (the real 3D Jake; the drawn cel-shaded Jake is only a fallback if the model can't load)
   function figStyle() {
-    try { const v = localStorage.getItem('gfj.figstyle'); if (v) return v; } catch (e) {}
+    try { const v = localStorage.getItem('gfj.figstyle'); if (v) return v === 'jake' ? 'jake3d' : v; } catch (e) {} // the drawn Jake was retired; Jake is the 3D model now
     return window.Engine && Engine.S && Engine.S.profile && Engine.S.profile.name === 'Jake' ? 'jake3d' : 'classic';
   }
 
@@ -297,7 +297,7 @@
   }
   // Pose the model's bones from the solved joints J/F (svg-style coords). Each bone gets a world matrix that maps its
   // bind-pose slice of the body onto the figure: rotated to the limb, stretched along it to the limb's length.
-  function poseJ3(s, J, F) {
+  function poseJ3(s, J, F, heel) {
     const { q, bw, fb, len, frame } = J3, bones = s.j3.bones;
     const V = (a) => new T.Vector3(a.x, -a.y, a.z);
     const xform = (p, Ft, Fb, gx, gy, piv) => new T.Matrix4().makeTranslation(p.x, p.y, p.z).multiply(Ft).multiply(new T.Matrix4().makeScale(gx, gy, gx)).multiply(Fb.clone().transpose()).multiply(new T.Matrix4().makeTranslation(-piv.x, -piv.y, -piv.z));
@@ -327,7 +327,18 @@
       const ankT = add(ank, nrm(sub(knee, ank)), footH); // the shoe's sole lands where the figure's foot is
       const Fsh = frame(V(F['sh' + i]), V(sub(ankT, knee)));
       set([S + 'Leg'], xform(V(knee), Fsh, fb[S + 'Leg'], g, len3(sub(ankT, knee)) / len[S + 'Leg'], q[S + 'Leg']));
-      set([S + 'Foot', S + 'ToeBase'], xform(V(ankT), Fsh, fb[S + 'Leg'], g, g, q[S + 'Foot']));
+      // calf raise: the foot tips forward over the ball of the foot so the toes stay planted while the heel comes up
+      let Ffoot = Fsh;
+      if (heel) {
+        const xb = new T.Vector3().setFromMatrixColumn(fb[S + 'Leg'], 0), yb = new T.Vector3().setFromMatrixColumn(fb[S + 'Leg'], 1);
+        const d = q[S + 'ToeBase'].clone().sub(q[S + 'Foot']);
+        const fa = d.dot(xb) * g, fbd = d.dot(yb) * g, Rr = Math.hypot(fa, fbd), phi = Math.atan2(fbd, fa);
+        const ph = Math.asin(Math.min(1, (heel + fbd) / Rr)) - phi;
+        Ffoot = new T.Matrix4().makeRotationAxis(new T.Vector3().setFromMatrixColumn(Fsh, 2).normalize(), ph).multiply(Fsh);
+      }
+      const Mfoot = xform(V(ankT), Ffoot, fb[S + 'Leg'], g, g, q[S + 'Foot']);
+      set([S + 'Foot'], Mfoot);
+      set([S + 'ToeBase'], xform(q[S + 'ToeBase'].clone().applyMatrix4(Mfoot), Fsh, fb[S + 'Leg'], g, g, q[S + 'ToeBase'])); // toes stay flat
     }
   }
   const JAKE = { skin: 0xd59a6f, tank: 0x16a184, shorts: 0x15171b, shoe: 0xf1f1ee, hair: 0x22160f, sock: 0xe8e8e4 };
@@ -432,10 +443,11 @@
     const pad = new T.MeshStandardMaterial({ color: 0x23282e, roughness: 0.7, metalness: 0.1 });
     const steel = new T.MeshStandardMaterial({ color: 0xa3acb6, roughness: 0.28, metalness: 0.85 });
     const iron = new T.MeshStandardMaterial({ color: 0x1d2227, roughness: 0.45, metalness: 0.5 });
-    scene.add(new T.HemisphereLight(0xdde7ff, 0x15181c, 1.1));
-    const key = new T.DirectionalLight(0xffffff, 2.6); key.position.set(80, 160, 140); scene.add(key);
-    const rim = new T.DirectionalLight(0x8fb0ff, 1.8); rim.position.set(-120, 60, -100); scene.add(rim);
-    const fill = new T.DirectionalLight(0xffe2c8, 0.6); fill.position.set(60, -40, 120); scene.add(fill);
+    // the 3D model gets neutral light (the blue sky/rim light suited the grey mannequin but tinted his clothes blue)
+    scene.add(j3 ? new T.HemisphereLight(0xffffff, 0x2a2622, 1.0) : new T.HemisphereLight(0xdde7ff, 0x15181c, 1.1));
+    const key = new T.DirectionalLight(j3 ? 0xfff6ec : 0xffffff, j3 ? 2.4 : 2.6); key.position.set(80, 160, 140); scene.add(key);
+    const rim = new T.DirectionalLight(j3 ? 0xffffff : 0x8fb0ff, j3 ? 0.7 : 1.8); rim.position.set(-120, 60, -100); scene.add(rim);
+    const fill = new T.DirectionalLight(0xffe2c8, j3 ? 0.5 : 0.6); fill.position.set(60, -40, 120); scene.add(fill);
 
     const torsoW = (t, front) => [0.66 * (front && t > 0.55 && t < 0.98 ? 1.14 : 1), 0.95 + 0.62 * sstep(0.22, 0.86, t)];
     // colours: grey everywhere (classic), or Jake's skin/clothes
@@ -506,12 +518,12 @@
     // ---- hidden "honest" mode: a small dangling part on a spring (hero view only) ----
     let honest = null;
     if (honestOn()) {
-      const skin = figStyle() === 'jake' ? new T.MeshToonMaterial({ color: JAKE.skin, gradientMap: rampTex() }) : new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
+      const skin = j3 ? new T.MeshStandardMaterial({ color: 0xc4845e, roughness: 0.8 }) : jake ? new T.MeshToonMaterial({ color: JAKE.skin, gradientMap: rampTex() }) : new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
       const shaft = new T.Mesh(new T.BufferGeometry(), skin);
       const tipM = new T.Mesh(new T.SphereGeometry(2.75, 18, 14), skin);
       const b0 = new T.Mesh(new T.SphereGeometry(2.9, 16, 12), skin), b1 = new T.Mesh(new T.SphereGeometry(2.9, 16, 12), skin);
       rig.add(shaft); rig.add(tipM); rig.add(b0); rig.add(b1);
-      if (figStyle() === 'jake') [shaft, tipM, b0, b1].forEach((m) => m.add(new T.Mesh(m.geometry, ink())));
+      if (jake && !j3) [shaft, tipM, b0, b1].forEach((m) => m.add(new T.Mesh(m.geometry, ink())));
       honest = { shaft, tipM, b0, b1, pts: null, prev: null };
     }
     // ---- equipment ----
@@ -713,7 +725,7 @@
       const hang = add(add(A2, v3(0, 1, 0), 3.2), F.torso, -0.5);
       H.b0.position.copy(W3(add(hang, side, 2.4))); H.b1.position.copy(W3(add(hang, side, -2.4)));
     }
-    if (s.j3) poseJ3(s, J, F);
+    if (s.j3) poseJ3(s, J, F, heel);
     if (props.mid) props.mid.position.copy(W3(add(J.mid, nrm(sub(J.hand0, J.elb0)), def.hold === 'wheel' ? 4 : 0)));
     if (props.back) props.back.position.copy(W3(add(add(J.sho, nrm(sub(J.sho, J.hip)), 2), F.torso, -9)));
     if (props.hipbar) props.hipbar.position.copy(W3(add(J.hip, F.torso, 13)));

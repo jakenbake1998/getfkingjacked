@@ -840,8 +840,8 @@
       </div>
 
       <h2>Exercise figure</h2>
-      ${(() => { const st = window.Figure3D && Figure3D.style ? Figure3D.style() : 'classic'; return `<div class="seg seg3"><button class="${st === 'classic' ? 'on' : ''}" data-act="figstyle" data-k="classic">Classic</button><button class="${st === 'jake' ? 'on' : ''}" data-act="figstyle" data-k="jake">Jake</button><button class="${st === 'jake3d' ? 'on' : ''}" data-act="figstyle" data-k="jake3d">Jake 3D</button></div>
-      <div class="sub" style="margin:-6px 4px 0">${st === 'jake3d' ? 'The real 3D you, built from your character sheet.' : st === 'jake' ? 'The intro guy: tank top, shorts, mustache, comic-book shading.' : 'Plain grey figure with the worked muscles lit up.'}</div>`; })()}
+      ${(() => { const st = window.Figure3D && Figure3D.style ? Figure3D.style() : 'classic'; return `<div class="seg seg2"><button class="${st === 'classic' ? 'on' : ''}" data-act="figstyle" data-k="classic">Classic</button><button class="${st === 'jake3d' ? 'on' : ''}" data-act="figstyle" data-k="jake3d">Jake</button></div>
+      <div class="sub" style="margin:-6px 4px 0">${st === 'jake3d' ? 'The real 3D you, built from your character sheet.' : 'Plain grey figure with the worked muscles lit up.'}</div>`; })()}
 
       <h2>Your equipment</h2>
       <div class="card">${EQUIPMENT.map((e) => `<div class="toggle"><span>${esc(e.name)}</span><button class="sw ${S.settings.equipment[e.id] ? 'on' : ''}" data-act="eq" data-k="${e.id}" role="switch" aria-checked="${!!S.settings.equipment[e.id]}" aria-label="${esc(e.name)}"></button></div>`).join('')}</div>
@@ -933,7 +933,7 @@
         if (ui.verTaps.length >= 5) { ui.verTaps = []; const on = localStorage.getItem('gfj.honest') !== '1'; if (window.Figure3D && Figure3D.setHonest) Figure3D.setHonest(on); else localStorage.setItem('gfj.honest', on ? '1' : '0'); toast(on ? 'Anatomically honest mode: on' : 'Anatomically honest mode: off'); }
         break;
       }
-      case 'figstyle': if (window.Figure3D && Figure3D.setStyle) { Figure3D.setStyle(el.dataset.k); render(); toast(el.dataset.k === 'jake3d' ? 'Figure: Jake 3D' : el.dataset.k === 'jake' ? 'Figure: Jake' : 'Figure: Classic'); } break;
+      case 'figstyle': if (window.Figure3D && Figure3D.setStyle) { Figure3D.setStyle(el.dataset.k); render(); toast(el.dataset.k === 'jake3d' ? 'Figure: Jake' : 'Figure: Classic'); } break;
       case 'plandraft': { const k = el.dataset.k, v = el.dataset.v; ui.planDraft = ui.planDraft || {}; ui.planDraft[k] = isNaN(+v) ? v : +v; render(); break; }
       case 'planundo': ui.planDraft = null; render(); break;
       case 'plansave': {
