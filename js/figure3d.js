@@ -273,10 +273,11 @@
     let honest = null;
     if (honestOn()) {
       const skin = new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
-      const shaft = new T.Mesh(new T.CapsuleGeometry(2.4, 18.2, 8, 16).translate(0, 11.5, 0), skin);
+      const shaft = new T.Mesh(new T.BufferGeometry(), skin);
+      const tipM = new T.Mesh(new T.SphereGeometry(2.75, 18, 14), skin);
       const b0 = new T.Mesh(new T.SphereGeometry(2.9, 16, 12), skin), b1 = new T.Mesh(new T.SphereGeometry(2.9, 16, 12), skin);
-      rig.add(shaft); rig.add(b0); rig.add(b1);
-      honest = { shaft, b0, b1, tip: null, v: { x: 0, y: 0, z: 0 } };
+      rig.add(shaft); rig.add(tipM); rig.add(b0); rig.add(b1);
+      honest = { shaft, tipM, b0, b1, pts: null, prev: null };
     }
     // ---- equipment ----
     const props = { hold: [], extents: [] };
@@ -414,22 +415,46 @@
       if (props.rope) props.rope[i].position.copy(W3(add(hand, v3(0, 6, i ? -1.5 : 1.5))));
     }
     if (s.honest) {
-      const H = s.honest, L2 = 23, dt = 1 / 60; // ~9 in at this scale (1 unit ≈ 1 cm)
-      const A = add(add(add(J.hip, F.torso, 9.5), tdir, -7.5), v3(0, 0, 0));
-      if (!H.tip || s.still) { H.tip = add(A, nrm(add(v3(0, 1, 0), F.torso, 0.25)), L2); H.v = v3(0, 0, 0); }
-      else {
-        H.v = add(H.v, v3(0, 981 * dt, 0));
-        // keep it off the thighs/body: push gently forward
-        H.v = add(H.v, F.torso, 120 * dt);
-        let tip = add(H.tip, H.v, dt);
-        const d = sub(tip, A), l = len3(d) || 1;
-        tip = add(A, d, L2 / l); // rope constraint
-        H.v = v3((tip.x - H.tip.x) / dt * 0.9, (tip.y - H.tip.y) / dt * 0.9, (tip.z - H.tip.z) / dt * 0.9);
-        H.tip = tip;
+      // A chain of 8 points on springs (Verlet): gravity pulls each one, the base leads and the rest lags,
+      // a little bending stiffness keeps it a curve rather than a rope. ~23 units ≈ 9 in at this scale.
+      const H = s.honest, N = 8, SEG = 23 / (N - 1), G = 981 / 3600;
+      const A = add(J.hip, F.torso, 9.5); const A2 = add(A, tdir, -7.5);
+      const baseDir = nrm(add(add(F.torso, tdir, -0.6), v3(0, 0.5, 0)));
+      if (!H.pts) {
+        H.pts = []; for (let i = 0; i < N; i++) H.pts.push(add(A2, nrm(add(baseDir, v3(0, i * 0.35, 0))), i * SEG));
+        H.prev = H.pts.map((q) => v3(q.x, q.y, q.z));
       }
-      place(H.shaft, A, H.tip, F.torso, 1);
-      const side = nrm(cross(nrm(sub(H.tip, A)), F.torso));
-      const hang = add(A, nrm(add(sub(H.tip, A), v3(0, 14, 0))), 3.2);
+      const P2 = H.pts, PV = H.prev;
+      P2[0] = A2; PV[0] = A2;
+      for (let i = 1; i < N; i++) {
+        const q = P2[i], vel = v3((q.x - PV[i].x) * 0.965, (q.y - PV[i].y) * 0.965, (q.z - PV[i].z) * 0.965);
+        PV[i] = v3(q.x, q.y, q.z);
+        P2[i] = v3(q.x + vel.x, q.y + vel.y + G, q.z + vel.z);
+      }
+      for (let it = 0; it < 6; it++) {
+        // the first link stays fairly firm at the base
+        const t1 = add(P2[0], baseDir, SEG);
+        P2[1] = add(P2[1], sub(t1, P2[1]), 0.45);
+        for (let i = 1; i < N; i++) {
+          const d = sub(P2[i], P2[i - 1]), l = len3(d) || 1;
+          P2[i] = add(P2[i - 1], d, SEG / l);
+          if (i >= 2) { // gentle bending stiffness
+            const dir = nrm(sub(P2[i - 1], P2[i - 2]));
+            const want = add(P2[i - 1], dir, SEG);
+            P2[i] = add(P2[i], sub(want, P2[i]), 0.06);
+          }
+          // never swing back into the body
+          const rel = dot(sub(P2[i], A), F.torso);
+          if (rel < 1.5) P2[i] = add(P2[i], F.torso, 1.5 - rel);
+        }
+      }
+      const curve = new T.CatmullRomCurve3(P2.map(W3));
+      const g = new T.TubeGeometry(curve, 28, 2.4, 12, false);
+      H.shaft.geometry.dispose(); H.shaft.geometry = g;
+      H.tipM.position.copy(W3(P2[N - 1]));
+      const d0 = nrm(sub(P2[2], P2[0]));
+      const side = nrm(cross(d0, F.torso));
+      const hang = add(add(A2, v3(0, 1, 0), 3.2), F.torso, -0.5);
       H.b0.position.copy(W3(add(hang, side, 2.4))); H.b1.position.copy(W3(add(hang, side, -2.4)));
     }
     if (props.mid) props.mid.position.copy(W3(add(J.mid, nrm(sub(J.hand0, J.elb0)), def.hold === 'wheel' ? 6 : def.hold === 'kbmid' ? 1 : 2.5)));
@@ -532,9 +557,9 @@
     thumbR.setPixelRatio(1); thumbR.setSize(size, size, false);
     const s = build(id);
     frameCam(thumbCam, size > 200 ? s.view : s.mini, 1, s.def.cam);
-    if (s.honest) [s.honest.shaft, s.honest.b0, s.honest.b1].forEach((m) => (m.visible = false));
+    if (s.honest) [s.honest.shaft, s.honest.tipM, s.honest.b0, s.honest.b1].forEach((m) => (m.visible = false));
     pose(s, k == null ? 1 : k);
-    if (s.honest) [s.honest.shaft, s.honest.b0, s.honest.b1].forEach((m) => (m.visible = true));
+    if (s.honest) [s.honest.shaft, s.honest.tipM, s.honest.b0, s.honest.b1].forEach((m) => (m.visible = true));
     thumbR.render(s.scene, thumbCam);
     return thumbR.domElement.toDataURL('image/jpeg', 0.82);
   }

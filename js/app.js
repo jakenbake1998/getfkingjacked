@@ -784,7 +784,7 @@
       <h2>Lifts <span class="h2-sub">change ${rangeName}</span></h2>
       <div class="card">${lifts.length ? lifts.map((l) => { const last = l.s[l.s.length - 1]; const d = deltaIn(l.s); return `<button class="lift" data-act="lift" data-id="${l.id}">${thumb(l.id, 'thumb sm')}<div class="nm">${esc(l.ex.name)}<small>${l.s.length} session${l.s.length > 1 ? 's' : ''}${d ? `, <span class="${d > 0 ? 'delta-up' : 'delta-down'}">${d > 0 ? '+' : ''}${Math.round(d)}</span> ${rangeName}` : ''}</small></div>${spark(l.s)}<div class="val">${Math.round(last.v)}<small style="color:var(--muted)">${l.ex.unit === 'lb' ? 'est. max' : l.ex.unit === 'sec' ? 'sec' : 'reps'}</small></div></button>`; }).join('') : '<div class="empty">No lifts in this range.</div>'}</div>
       <button class="btn-quiet" data-act="openlib">See all exercises</button>
-      <button class="btn-link" data-act="methodinfo">How your plan decides weights and reps</button>`;
+      <button class="pull-tab" data-act="methodinfo"><span class="pt-grab"></span><span class="pt-row"><span>How your plan decides weights and reps</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14l5-5 5 5"/></svg></span></button>`;
   }
 
   // ---------------- body ----------------
@@ -836,7 +836,7 @@
         <div class="lbl">Daily step goal</div>
         <div class="chips">${[0, 6000, 8000, 10000, 12000].map((n) => `<button class="chip ${ch('stepGoal', n)}" data-act="plandraft" data-k="stepGoal" data-v="${n}">${n ? n.toLocaleString() : 'Off'}</button>`).join('')}</div>
         ${dirty ? `<div class="plan-save"><button class="btn-main" data-act="plansave">Save changes</button><button class="btn-link" data-act="planundo">Undo</button></div>` : ''}`; })()}
-        <button class="btn-link" data-act="methodinfo" style="margin-top:6px">How your plan decides weights and reps</button>
+        <button class="pull-tab" data-act="methodinfo"><span class="pt-grab"></span><span class="pt-row"><span>How your plan decides weights and reps</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14l5-5 5 5"/></svg></span></button>
       </div>
 
       <h2>Your equipment</h2>
@@ -863,7 +863,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv,text/plain" hidden>
-      <div class="sub ver-tap" data-act="ver" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.5</div>`;
+      <div class="sub ver-tap" data-act="ver" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.6</div>`;
   }
 
 
