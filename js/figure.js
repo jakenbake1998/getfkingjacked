@@ -22,6 +22,8 @@
   const BENCH = (x0, x1, top) => `<g class="fg-prop"><rect x="${x0}" y="${top}" width="${x1 - x0}" height="7" rx="3"/><rect x="${x0 + 8}" y="${top + 7}" width="5" height="${186 - top - 7}"/><rect x="${x1 - 13}" y="${top + 7}" width="5" height="${186 - top - 7}"/></g>`;
   const EX = {
     db_bench: {
+      cam: [0.25, 0.55, 0.8],
+      handsZ: 23,
       view: [22, 44, 150, 145], mini: [20, 50, 140, 140], root: 'hip', hold: 'db',
       prop: BENCH(30, 150, 140),
       target: { chest: 1, triceps: 2, shoulders: 2 },
@@ -29,6 +31,8 @@
       b: { at: [100, 126], t: -90, hd: 0, ua: [170, 166], fa: [176, 172], th: [62, 52], sh: [2, -4] },
     },
     pallof: {
+      cam: [0.55, 0.1, 0.83],
+      handsZ: 3,
       view: [0, 8, 240, 182], mini: [40, 10, 170, 170], root: 'ankle', hold: 'handle', cable: [22, 62],
       prop: '<g class="fg-prop"><rect x="10" y="20" width="12" height="166" rx="3"/><rect x="18" y="56" width="10" height="12" rx="2"/></g>',
       target: { abs: 1, obliques: 1, shoulders: 2 },
@@ -36,18 +40,24 @@
       b: { at: [120, 184], t: 3, hd: 0, ua: [86, 84], fa: [90, 88], th: [10, 2], sh: [-7, -3] },
     },
     db_rdl: {
+      cam: [-0.55, 0.18, 0.8],
+      handsZ: 15,
       view: [10, 8, 240, 182], mini: [40, 30, 150, 150], root: 'ankle', hold: 'db',
       target: { hams: 1, glutes: 1, lowerback: 2 },
       a: { at: [100, 184], t: 0, hd: 0, ua: [4, 2], fa: [2, 0], th: [0, -2], sh: [0, 2] },
       b: { at: [100, 184], t: 78, hd: -14, ua: [-2, -4], fa: [-2, -4], th: [22, 20], sh: [-6, -4] },
     },
     db_curl: {
+      cam: [0.62, 0.1, 0.78],
+      handsZ: 19,
       view: [-20, 8, 240, 182], mini: [30, 10, 150, 150], root: 'ankle', hold: 'db',
       target: { biceps: 1, forearms: 2 },
       a: { at: [100, 184], t: 0, hd: 0, ua: [4, 0], fa: [6, 2], th: [0, -2], sh: [0, 2] },
       b: { at: [100, 184], t: 0, hd: 0, ua: [8, 4], fa: [150, 146], th: [0, -2], sh: [0, 2] },
     },
     rope_pushdown: {
+      cam: [-0.35, 0.12, 0.92],
+      handsZ: 4,
       view: [-10, 4, 240, 184], mini: [40, 10, 160, 160], root: 'ankle', hold: 'rope', cable: [160, 24],
       prop: '<g class="fg-prop"><rect x="168" y="10" width="12" height="176" rx="3"/><rect x="154" y="18" width="16" height="10" rx="2"/></g>',
       target: { triceps: 1, forearms: 2 },
@@ -186,5 +196,5 @@
     requestAnimationFrame(frame);
   }
 
-  window.Figure = { has: (id) => !!EX[id], svg, mount };
+  window.Figure = { has: (id) => !!EX[id], svg, mount, defs: EX, solve, poseAt, ease, L };
 })();

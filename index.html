@@ -334,7 +334,8 @@ body.noscroll{overflow:hidden}
 .scrim.closing .sheet{animation:slidedown .2s ease-in forwards}
 .sheet{animation:slideup .28s cubic-bezier(.2,.8,.2,1)!important}
 .screen.tabin{animation:fade .2s}
-.hero-fig{width:100%;height:100%}
+.hero-fig{width:100%;height:100%;position:relative}
+.fig3d{position:absolute;inset:0;width:100%;height:100%;display:block}
 .hero.figbg .hero-fig{height:calc(100% - 70px);margin-top:8px}
 .hero.figbg{max-height:52vh}
 .howto-img.figbg{aspect-ratio:4/3;max-height:40vh}
@@ -408,10 +409,11 @@ body.is-dragging{user-select:none;-webkit-user-select:none}
 <nav class="tabs" id="tabs"></nav>
 <div id="detail"></div>
 <div id="overlay"></div>
-<script src="js/data.js?v=1.5"></script>
-<script src="js/exinfo.js?v=1.5"></script>
-<script src="js/figure.js?v=1.5"></script>
-<script src="js/engine.js?v=1.5"></script>
-<script src="js/app.js?v=1.5"></script>
+<script src="js/data.js?v=1.6"></script>
+<script src="js/exinfo.js?v=1.6"></script>
+<script src="js/figure.js?v=1.6"></script>
+<script src="js/figure3d.js?v=1.6"></script>
+<script src="js/engine.js?v=1.6"></script>
+<script src="js/app.js?v=1.6"></script>
 </body>
 </html>

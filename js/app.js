@@ -72,7 +72,8 @@
   function thumb(id, cls) {
     const inf = info(id);
     const ex = E.exInfo(id);
-    if (window.Figure && Figure.has(id)) return `<span class="${cls || 'thumb'} thumb-fig figbg">${Figure.svg(id, 1, 'mini')}</span>`;
+    const f3 = window.Figure3D && Figure3D.has(id) && Figure3D.thumbURL(id);
+    if (f3) return `<img class="${cls || 'thumb'} thumb-fig figbg" src="${f3}" alt="">`;
     return inf.img
       ? `<img class="${cls || 'thumb'}" src="${imgSrc(id, inf.img > 1 ? 1 : 0)}" alt="" loading="lazy">`
       : `<span class="${cls || 'thumb'} thumb-none">${esc(ex.group.slice(0, 2))}</span>`;
@@ -302,7 +303,7 @@
     let body = '';
     const head = (title) => `<div class="dv-bar"><button class="dv-back" data-act="dview" data-v="main" aria-label="Back">‹</button><span>${title}</span><span style="width:40px"></span></div>`;
     if (d.view === 'main') {
-      const fig = window.Figure && Figure.has(it.ex);
+      const fig = window.Figure3D && Figure3D.has(it.ex) && !Figure3D.failed;
       body = `<div class="hero ${fig ? 'figbg' : ''}">${fig ? `<div class="hero-fig" data-keep data-fig="${it.ex}" data-key="fig-${it.ex}"></div>` : inf.img ? `<img id="hero-img" src="${imgSrc(it.ex, 0)}" alt="${esc(ex.name)}">` : `<div class="hero-none">${muscleMap(inf.m.length ? inf.m : [ex.group.toLowerCase()], inf.s)}</div>`}
           <button class="dv-close" data-act="dclose" aria-label="Close">✕</button>
           <div class="hero-foot"><h2 class="hero-name">${esc(ex.name)}</h2><button class="howto-btn" data-act="dview" data-v="howto">▶ How-to</button></div></div>
@@ -323,7 +324,7 @@
       const tabs = ['Instructions', 'Target', 'Equipment'];
       const eqNames = ex.eq.length ? ex.eq.map((k) => (EQUIPMENT.find((e) => e.id === k) || { name: k }).name) : ['None. Just you.'];
       body = `${head('How-to')}
-        ${window.Figure && Figure.has(it.ex) ? `<div class="howto-img figbg"><div class="hero-fig" data-keep data-fig="${it.ex}" data-key="figh-${it.ex}"></div></div>` : inf.img ? `<div class="howto-img"><img id="hero-img" src="${imgSrc(it.ex, 0)}" alt=""></div>` : ''}
+        ${window.Figure3D && Figure3D.has(it.ex) && !Figure3D.failed ? `<div class="howto-img figbg"><div class="hero-fig" data-keep data-fig="${it.ex}" data-key="figh-${it.ex}"></div></div>` : inf.img ? `<div class="howto-img"><img id="hero-img" src="${imgSrc(it.ex, 0)}" alt=""></div>` : ''}
         <div class="dpad"><h2 class="dv-title">${esc(ex.name)}</h2>
         <div class="seg seg3">${tabs.map((t, k) => `<button class="${d.tab === k ? 'on' : ''}" data-act="dtab" data-k="${k}">${t}</button>`).join('')}</div>
         ${d.tab === 0 ? `<ol class="steps-list">${(inf.steps.length ? inf.steps : ['Move slowly and with control through the full range you can do without pain.']).map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` : ''}
@@ -370,9 +371,9 @@
     const prev = $('#detail .detail');
     if (prev && prev.classList.contains('closing')) detailEl.textContent = '';
     detailEl.innerHTML = `<div class="detail" role="dialog" aria-modal="true" aria-label="${esc(ex.name)}"><div class="dv-body ${d.view === 'main' ? 'v-main' : 'v-sub'}" data-key="v-${d.view}-${d.i}">${body}</div></div>`;
-    document.querySelectorAll('#detail [data-fig]').forEach((el) => { if (!el.firstChild) Figure.mount(el, el.dataset.fig); });
+    document.querySelectorAll('#detail [data-fig]').forEach((el) => { if (!el.firstChild) Figure3D.mount(el, el.dataset.fig); });
     // photo flips between start and end position, like a slow animation
-    if (!(window.Figure && Figure.has(it.ex)) && inf.img > 1 && (d.view === 'main' || d.view === 'howto') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!(window.Figure3D && Figure3D.has(it.ex) && !Figure3D.failed) && inf.img > 1 && (d.view === 'main' || d.view === 'howto') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       let k = 0;
       flipTimer = setInterval(() => { const im = $('#hero-img'); if (!im) return clearInterval(flipTimer); k = 1 - k; im.src = imgSrc(it.ex, k); }, 1200);
     }
@@ -741,7 +742,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv" hidden>
-      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v1.5</div>`;
+      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v1.6</div>`;
   }
 
   // ---------------- actions ----------------
@@ -1008,4 +1009,6 @@
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
   keepAwake();
   render();
+  window.addEventListener('figthumbs', () => E.S && render());
+  if (window.Figure3D) Figure3D.warm();
 })();
