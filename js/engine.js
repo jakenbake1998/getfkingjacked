@@ -271,7 +271,7 @@
     return t;
   }
   function baseTarget(ex, scheme) {
-    const reps = ex.unit === 'sec' ? null : scheme.reps[ex.kind];
+    const reps = ex.unit === 'sec' ? null : ex.reps || scheme.reps[ex.kind];
     const hist = sessionsFor(ex.id);
     const last = hist[hist.length - 1];
     if (ex.unit === 'bw' || ex.unit === 'sec') {

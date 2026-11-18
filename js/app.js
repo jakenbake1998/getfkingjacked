@@ -230,7 +230,7 @@
   }
   function setRows(it, i, live) {
     const ex = E.exInfo(it.ex);
-    const unitLabel = ex.unit === 'sec' ? 'sec' : 'reps';
+    const unitLabel = ex.unit === 'sec' ? 'sec' : ex.repWord || 'reps';
     return `<div class="sets">
       <div class="set set-head ${live ? '' : 'nocheck'}"><span></span><span>${ex.unit === 'lb' ? (E.ownedDumbbells(ex) || ex.eq.includes('dumbbell') ? 'lb each' : 'lb') : ''}</span><span>${unitLabel}</span>${live ? '<span></span>' : ''}</div>
       ${it.sets.map((s, j) => `<div class="set ${s.done ? 'done' : ''} ${s.warm ? 'warm' : ''} ${live ? '' : 'nocheck'}">

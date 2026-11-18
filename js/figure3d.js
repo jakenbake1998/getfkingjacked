@@ -252,6 +252,7 @@
     db_bench: 'over', db_incline: 'over', db_floor_press: 'over', db_shoulder_press: 'over', standing_db_press: 'over', db_lateral: 'over', db_front_raise: 'over',
     reverse_curl: 'over', cable_lateral: 'neutral', face_pull: 'neutral', pallof: 'neutral', woodchop: 'neutral', db_thruster: 'neutral',
     fb_arnolddumbbellpress: 'under', fb_renegaderow: 'neutral', fb_australianchinup: 'over', fb_trxrow: 'neutral', fb_uprightrow: 'over', fb_barbellshrug: 'over',
+    farmers_walk: 'neutral', kb_farmers_walk: 'neutral',
   };
   function gripFor(id, def) {
     if (GRIP[id]) return GRIP[id];

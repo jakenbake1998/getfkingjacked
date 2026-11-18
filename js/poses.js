@@ -54,6 +54,12 @@
   add('rear_delt_fly', standing({ hold: 'db', cam: [0.45, 0.35, 0.83],
     a: { t: 76, hd: -12, ua: [0, 0], fa: [0, 0], abd: [6, 6], th: [18, 18], sh: [-8, -8] },
     b: { t: 76, hd: -12, ua: [0, 0], fa: [0, 0], abd: [78, 78], th: [18, 18], sh: [-8, -8] } }));
+  // Farmer's walk: tall, shoulders down, a weight hanging at each side; walks in place with short steps.
+  const carry = (hold) => standing({ hold, handsZ: 24, target: { forearms: 1, traps: 1, abdominals: 2, glutes: 2 }, cam: [0.55, 0.15, 0.82], period: 1100,
+    a: { t: 0, hd: 0, ua: [2, 2], fa: [0, 0], abd: [4, 4], th: [20, -14], sh: [-6, -18] },
+    b: { t: 0, hd: 0, ua: [2, 2], fa: [0, 0], abd: [4, 4], th: [-14, 20], sh: [-18, -6] } });
+  add('farmers_walk', carry('db'));
+  add('kb_farmers_walk', carry('kb'));
   add('back_ext', { root: 'hip', at: [110, 128], bench: { x0: 30, x1: 116, top: 140 }, target: { 'lower back': 1, glutes: 2, hamstrings: 2 }, cam: BACKCAM,
     a: { t: 150, hd: 10, ua: [150, 150], fa: [-90, -90], th: [-90, -90], sh: [-90, -90] },
     b: { t: 88, hd: 0, ua: [100, 100], fa: [-150, -150], th: [-90, -90], sh: [-90, -90] } });

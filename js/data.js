@@ -5,6 +5,7 @@
 // kind sets rest time and rep targets: big (compound), mid, iso (isolation), core.
 // stress: joint load, 1 = some, 2 = high. Sore joints skip 2s, injured joints skip 1s and 2s.
 // unit: 'lb' weighted, 'bw' bodyweight reps, 'sec' timed hold.
+// reps / repWord: optional fixed rep target and its name (farmer's walk = 40 steps).
 // start: first-time suggested weight (lb, per dumbbell / total barbell) or reps.
 // fitbod: names Fitbod uses, for importing history.
 
@@ -25,6 +26,9 @@ window.EXERCISES = [
   { id: 'face_pull', name: 'Cable face pull', group: 'Shoulders', eq: ['cable'], kind: 'iso', unit: 'lb', start: 25, stress: {}, fitbod: ['Face Pull', 'Cable Face Pull'] },
   { id: 'rear_delt_fly', name: 'Dumbbell rear delt fly', group: 'Shoulders', eq: ['dumbbell'], kind: 'iso', unit: 'lb', start: 12.5, stress: {}, fitbod: ['Dumbbell Rear Delt Fly', 'Bent Over Dumbbell Reverse Fly'] },
   { id: 'back_ext', name: 'Back extension', group: 'Core', eq: ['bench'], kind: 'core', unit: 'bw', start: 10, stress: { lowback: 1 }, fitbod: ['Incline Back Extension', 'Back Extension'] },
+  // Loaded carry for grip, traps and core. reps = steps (both feet). Arms hang straight, so elbows and knees stay easy.
+  { id: 'farmers_walk', name: "Farmer's walk", group: 'Back', eq: ['dumbbell'], kind: 'mid', unit: 'lb', start: 50, reps: 40, repWord: 'steps', stress: {}, fitbod: ["Farmer's Walk", 'Farmers Walk', "Farmer's Carry", 'Farmers Carry', 'Dumbbell Farmers Walk'] },
+  { id: 'kb_farmers_walk', name: "Kettlebell farmer's walk", group: 'Back', eq: ['kettlebell'], kind: 'mid', unit: 'lb', start: 44, reps: 40, repWord: 'steps', stress: {}, fitbod: ['Kettlebell Farmers Walk', "Kettlebell Farmer's Walk", 'Kettlebell Farmers Carry'] },
 
   // ---------- Biceps ----------
   { id: 'hammer_curl', name: 'Hammer curl', group: 'Biceps', eq: ['dumbbell'], kind: 'iso', unit: 'lb', start: 25, stress: {}, fitbod: ['Hammer Curls', 'Hammer Curl', 'Dumbbell Hammer Curl'] },
@@ -134,6 +138,7 @@ window.DAYS = {
       { label: 'Biceps', ex: ['hammer_curl', 'db_curl', 'cable_curl', 'incline_curl', 'bb_curl'] },
       { label: 'Biceps 2', ex: ['rope_hammer_curl', 'conc_curl', 'cable_curl'] },
       { label: 'Lats', ex: ['straight_arm_pd'] },
+      { label: 'Carry', ex: ['farmers_walk', 'kb_farmers_walk'] },
       { label: 'Core', core: true, ex: ['hanging_knee_raise', 'ab_wheel', 'woodchop', 'back_ext', 'crunch'] },
     ],
   },
