@@ -57,12 +57,13 @@
   const info = (id) => (window.EXINFO && EXINFO[id]) || { m: [], s: [], steps: [], img: 0 };
   const imgSrc = (id, k) => 'img/ex/' + id + '-' + (k || 0) + '.jpg';
 
-  function toast(msg) {
+  function toast(msg, ms) {
+    document.querySelectorAll('.toast').forEach((x) => x.remove());
     const t = document.createElement('div');
     t.className = 'toast';
     t.textContent = msg;
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2600);
+    setTimeout(() => t.remove(), ms || 2600);
   }
   function setLine(ex, it) {
     const s = it.sets[0];
@@ -101,6 +102,7 @@
     renderTabs();
     if (!E.S) { renderSetup(); timerEl.innerHTML = ''; return; }
     app.classList.toggle('has-timer', !!E.S.timer);
+    document.body.classList.toggle('has-timer-on', !!E.S.timer);
     app.classList.toggle('has-cta', ui.tab === 'today' && !E.S.current && !ui.summary);
     if (ui.summary) { tabsEl.style.display = 'none'; renderSummary(); renderTimer(); renderDetail(); return; }
     if (ui.tab === 'today') E.S.current ? renderSession() : renderPreview();
@@ -202,12 +204,13 @@
   }
   function previewCard(it, i) {
     const ex = E.exInfo(it.ex);
+    const note = E.S.notes[it.ex];
     return `<div class="ex" data-i="${i}" data-key="ex-${it.ex}"><div class="ex-head">
       <button class="ex-open" data-act="detail" data-i="${i}">${thumb(it.ex)}
         <span class="ex-main"><span class="ex-name">${esc(ex.name)}</span>
         <span class="ex-meta">${setLine(ex, it)}${it.first ? ' <span class="first">New lift: start light</span>' : ''}${it.maxed ? ' <span class="first">Ready for heavier weights</span>' : ''}</span></span></button>
       <button class="ex-more" data-act="exmenu" data-i="${i}" aria-label="Options for ${esc(ex.name)}">⋯</button>
-    </div></div>`;
+    </div>${note ? `<div class="ex-note"><span>📝</span><span>${esc(note)}</span></div>` : ''}</div>`;
   }
 
   // ---------------- today: session ----------------
@@ -250,6 +253,7 @@
           <span class="ex-meta">${done ? '<span class="donechip">Done</span> ' : ''}${nDone} of ${it.sets.length} sets, ${mmss(it.rest)} rest</span></span></button>
         <button class="ex-more" data-act="exmenu" data-i="${i}" aria-label="Options for ${esc(ex.name)}">⋯</button>
       </div>
+      ${E.S.notes[it.ex] && (!done || it.open) ? `<div class="ex-note"><span>📝</span><span>${esc(E.S.notes[it.ex])}</span></div>` : ''}
       ${!done || it.open ? setRows(it, i, true) : ''}
     </div>`;
   }
@@ -363,13 +367,14 @@
       const tabs = ['Instructions', 'Target', 'Equipment'];
       const eqNames = ex.eq.length ? ex.eq.map((k) => (EQUIPMENT.find((e) => e.id === k) || { name: k }).name) : ['None. Just you.'];
       body = `${head('How-to')}
-        ${window.Figure3D && Figure3D.has(it.ex) && !Figure3D.failed ? `<div class="howto-img figbg"><div class="hero-fig" data-keep data-fig="${it.ex}" data-key="figh-${it.ex}"></div></div>` : inf.img ? `<div class="howto-img"><img id="hero-img" src="${imgSrc(it.ex, 0)}" alt=""></div>` : ''}
-        <div class="dpad"><h2 class="dv-title">${esc(ex.name)}</h2>
+        ${window.Figure3D && Figure3D.has(it.ex) && !Figure3D.failed ? `<div class="howto-img figbg"><div class="hero-fig" data-keep data-orbit data-fig="${it.ex}" data-key="figh-${it.ex}"></div><span class="spin-hint">⟲ Swipe to spin</span></div>` : inf.img ? `<div class="howto-img"><img id="hero-img" src="${imgSrc(it.ex, 0)}" alt=""></div>` : ''}
+        <div class="dpad howto-pad"><h2 class="dv-title">${esc(ex.name)}</h2>
         <div class="seg seg3">${tabs.map((t, k) => `<button class="${d.tab === k ? 'on' : ''}" data-act="dtab" data-k="${k}">${t}</button>`).join('')}</div>
+        <div class="howto-scroll">
         ${d.tab === 0 ? `<ol class="steps-list">${(inf.steps.length ? inf.steps : ['Move slowly and with control through the full range you can do without pain.']).map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` : ''}
         ${d.tab === 1 ? `<div class="target">${muscleMap(inf.m.length ? inf.m : [ex.group.toLowerCase()], inf.s)}<div class="tlegend"><span><i class="lg p"></i>Main: ${esc((inf.m.length ? inf.m : [ex.group]).map(cap).join(', '))}</span>${inf.s.length ? `<span><i class="lg s"></i>Also: ${esc(inf.s.map(cap).join(', '))}</span>` : ''}</div></div>` : ''}
         ${d.tab === 2 ? `<ul class="eq-list">${eqNames.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
-        </div>`;
+        </div></div>`;
     } else if (d.view === 'history') {
       const sess = E.sessionsFor(it.ex).slice().reverse();
       const series = E.liftSeries(it.ex);
@@ -409,7 +414,7 @@
     }
     const prev = $('#detail .detail');
     if (prev && prev.classList.contains('closing')) detailEl.textContent = '';
-    detailEl.innerHTML = `<div class="detail" role="dialog" aria-modal="true" aria-label="${esc(ex.name)}"><div class="dv-body ${d.view === 'main' ? 'v-main' : 'v-sub'}" data-key="v-${d.view}-${lib || d.i}">${body}</div></div>`;
+    detailEl.innerHTML = `<div class="detail ${d.view === 'howto' ? 'is-howto' : ''}" role="dialog" aria-modal="true" aria-label="${esc(ex.name)}"><div class="dv-body ${d.view === 'main' ? 'v-main' : 'v-sub'}" data-key="v-${d.view}-${lib || d.i}">${body}</div></div>`;
     document.querySelectorAll('#detail [data-fig]').forEach((el) => { if (!el.firstChild) Figure3D.mount(el, el.dataset.fig); });
     // photo flips between start and end position, like a slow animation
     if (!(window.Figure3D && Figure3D.has(it.ex) && !Figure3D.failed) && inf.img > 1 && (d.view === 'main' || d.view === 'howto') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -771,7 +776,7 @@
       ${fold('sets', 'Sets this week', (() => { const n = E.GROUPS.reduce((a, g) => a + week[g], 0), t = E.GROUPS.reduce((a, g) => a + E.WEEKLY_TARGET[g], 0); return n + ' of ' + t; })(),
         `<div class="card bars">${E.GROUPS.map((g) => { const n = week[g], t = E.WEEKLY_TARGET[g]; return `<div class="b"><span>${g}</span><div class="track"><div class="fill ${n >= t ? 'met' : ''}" style="width:${Math.min(100, (n / t) * 100)}%"></div></div><span class="n">${n} / ${t}</span></div>`; }).join('')}</div>`)}
       ${fold('compare', 'How you compare', std === null ? 'Add your info' : std.length ? std[0].name + ': ' + std[0].level : 'No standard lifts yet',
-        `<div class="card"><button class="info-btn" data-act="stdinfo" aria-label="How the comparison works">i</button>${std === null ? `<div class="empty">Add your body weight, sex and age in the Body tab to see where your lifts rank, from beginner to elite.</div>` : std.length ? std.map((x) => `<div class="std"><div class="std-top"><b>${esc(x.name)}</b><span class="std-lv">${x.level}</span></div>
+        `<div class="card"><div class="std-info"><button class="btn-link" data-act="stdinfo">How this is worked out</button></div>${std === null ? `<div class="empty">Add your body weight, sex and age in the Body tab to see where your lifts rank, from beginner to elite.</div>` : std.length ? std.map((x) => `<div class="std"><div class="std-top"><b>${esc(x.name)}</b><span class="std-lv">${x.level}</span></div>
           <div class="std-bar"><i style="left:${(x.pos * 100).toFixed(1)}%"></i></div><div class="std-scale">${E.LEVELS.map((l) => `<span>${l}</span>`).join('')}</div>
           <div class="sub">Est. max ${x.e1rm} lb${x.from && E.exInfo(x.from).eq.includes('dumbbell') ? ' (barbell equivalent)' : ''}, ${x.ratio.toFixed(2)}× body weight.${x.next ? ` ${x.nextLevel} at about ${x.next} lb.` : ''}</div></div>`).join('') : '<div class="empty">None of your logged lifts match the standard lifts (bench, overhead press, squat, deadlift, row) yet.</div>'}</div>`)}
       ${W.length ? fold('bw', 'Body weight', fmtW(W[W.length - 1].lb) + ' lb', `<div class="card"><div class="big-num">${fmtW(W[W.length - 1].lb)}<small>lb</small></div>
@@ -857,7 +862,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv,text/plain" hidden>
-      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.0</div>`;
+      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v2.1</div>`;
   }
 
 
@@ -896,6 +901,7 @@
     const ae = document.activeElement;
     if (ae && ae !== el && ae.matches && ae.matches('input[data-f], #steps-in, #bw-in')) ae.blur(); // fires 'change' first
     const act = el.dataset.act;
+    if (!ui.detail && ['dview', 'dtab', 'libg', 'libopen', 'libback', 'restpick', 'restset', 'savenote', 'warmup'].includes(act)) return;
     if (act === 'close' && ev.target !== el) return;
     const i = el.dataset.i != null ? +el.dataset.i : null;
     const j = el.dataset.j != null ? +el.dataset.j : null;
@@ -938,6 +944,7 @@
       case 'check': {
         const it = c.items[i], st = it.sets[j];
         st.done = !st.done;
+        if (st.done && E.S.notes[it.ex] && !it.noted) { it.noted = true; toast('📝 ' + E.S.notes[it.ex], 4500); }
         if (st.done) {
           // Real rest = time since the last set of this exercise, minus about how long a set takes.
           const now = Date.now(), ex = E.exInfo(it.ex);
@@ -1192,6 +1199,8 @@
   document.addEventListener('touchstart', (ev) => {
     const el = ev.target.closest && (ev.target.closest('.sheet') || ev.target.closest('#detail .detail'));
     if (!el || ev.target.closest('svg.chart') || ev.target.closest('.hero-fig')) return;
+    const inner = ev.target.closest('.howto-scroll');
+    if (inner && inner.scrollTop > 0) return;
     if (el.scrollTop > 0) return;
     swipe = { el, y: ev.touches[0].clientY, dy: 0, sheet: el.classList.contains('sheet'), lastY: ev.touches[0].clientY, dir: 0, t: Date.now(), v: 0 };
   }, { passive: true });
@@ -1232,6 +1241,7 @@
       E.S.steps[todayKey()] = v; E.save(); render();
     } else if (t.id === 'filebk' || t.id === 'filefb') {
       const f = t.files[0];
+      t.value = ''; // so picking the same file again still works
       if (!f) return;
       f.text().then((txt) => {
         try {

@@ -407,13 +407,14 @@
     }
   }
 
-  function frameCam(cam, view, aspect, camDir) {
+  function frameCam(cam, view, aspect, camDir, yaw) {
     const [x, y, w, h] = view;
     const target = new T.Vector3(x + w / 2, -(y + h / 2), 0);
     const half = ((cam.fov / 2) * Math.PI) / 180;
     const needH = Math.max(h, w / aspect);
     const dist = (needH / 2) / Math.tan(half) * 1.06;
     const dir = new T.Vector3(...(camDir || [0.5, 0.16, 0.85])).normalize();
+    if (yaw) dir.applyAxisAngle(new T.Vector3(0, 1, 0), yaw); // spin around the figure at the same height
     cam.position.copy(target).addScaledVector(dir, dist);
     cam.lookAt(target);
   }
@@ -448,12 +449,27 @@
       el.appendChild(h.r.domElement);
       const t0 = performance.now();
       const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      // Swipe left/right to spin the camera 360° around the figure (How-to only). No zoom, no tilt.
+      const spin = { yaw: 0, v: 0, drag: null };
+      if (el.dataset.orbit != null) {
+        el.addEventListener('pointerdown', (e) => { spin.drag = { x: e.clientX, id: e.pointerId, t: performance.now() }; spin.v = 0; try { el.setPointerCapture(e.pointerId); } catch (er) {} });
+        el.addEventListener('pointermove', (e) => {
+          if (!spin.drag || e.pointerId !== spin.drag.id) return;
+          const now = performance.now(), dx = e.clientX - spin.drag.x;
+          const d = (-dx / Math.max(200, el.clientWidth)) * Math.PI * 1.6;
+          spin.yaw += d; spin.v = d / Math.max(1, now - spin.drag.t) * 16;
+          spin.drag.x = e.clientX; spin.drag.t = now;
+        });
+        const up = (e) => { if (spin.drag && e.pointerId === spin.drag.id) spin.drag = null; };
+        el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+      }
       const loop = (now) => {
         if (h.el !== el || !el.isConnected) return;
         const w = el.clientWidth || 300, hh = el.clientHeight || 220;
         if (h.r.domElement.width !== Math.round(w * h.r.getPixelRatio()) || h.r.domElement.height !== Math.round(hh * h.r.getPixelRatio())) h.r.setSize(w, hh, false);
         h.cam.aspect = w / hh; h.cam.updateProjectionMatrix();
-        frameCam(h.cam, s.view, w / hh, s.def.cam);
+        if (!spin.drag && Math.abs(spin.v) > 0.0004) { spin.yaw += spin.v; spin.v *= 0.94; }
+        frameCam(h.cam, s.view, w / hh, s.def.cam, spin.yaw);
         pose(s, still ? 1 : F.ease(((now - t0) / (s.def.period || 2600)) % 1));
         h.r.render(s.scene, h.cam);
         requestAnimationFrame(loop);

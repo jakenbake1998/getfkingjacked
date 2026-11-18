@@ -66,7 +66,7 @@
     if (s.rotIdx === undefined) s.rotIdx = null;
     delete s.settings.order;
     // v2.0: sit-ups were wrongly merged into crunches on import. Jake's only sit-up days were Dec 8 2025 and Jan 8 2026 (no crunches those days).
-    if (!s.fixSitups) {
+    if (!s.fixSitups && s.profile && s.profile.name === 'Jake') {
       const day = (d) => { d = new Date(d); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
       let moved = false;
       for (const h of s.history) {
@@ -659,7 +659,8 @@
     return new Date(t);
   }
   const localKey = (d) => { d = new Date(d); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
-  function parseCSV(txt) {
+  function parseCSV(txt, delim) {
+    const D = delim || ',';
     const rows = [];
     let row = [], cell = '', q = false;
     for (let i = 0; i < txt.length; i++) {
@@ -669,7 +670,7 @@
         else if (c === '"') q = false;
         else cell += c;
       } else if (c === '"') q = true;
-      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === D) { row.push(cell); cell = ''; }
       else if (c === '\n' || c === '\r') {
         if (c === '\r' && txt[i + 1] === '\n') i++;
         row.push(cell); rows.push(row); row = []; cell = '';
@@ -709,19 +710,22 @@
   // Workout history from Fitbod, Strong, Hevy, JEFIT, FitNotes or any CSV with date, exercise, weight and reps columns.
   function importHistory(txt, unitHint) {
     const first = txt.split(/\r?\n/, 1)[0] || '';
-    if ((first.match(/;/g) || []).length > (first.match(/,/g) || []).length) txt = txt.replace(/;/g, ',');
-    const rows = parseCSV(txt.replace(/^\uFEFF/, ''));
+    const semi = (first.match(/;/g) || []).length > (first.match(/,/g) || []).length;
+    const rows = parseCSV(txt.replace(/^\uFEFF/, ''), semi ? ';' : ',');
+    const num = (v) => parseFloat(String(v || '').replace(',', '.'));
     if (rows.length < 2) throw new Error('That file has no rows.');
     const head = rows[0].map((h) => h.trim().toLowerCase().replace(/^"|"$/g, ''));
     const app = detectApp(head);
     const col = (re) => head.findIndex((h) => re.test(h));
     const cDate = col(/^date$|^date\b|start_time|^start|workout date/), cEx = col(/exercise(_| )?(name|title)?$|^exercise/), cReps = col(/^reps$|^reps\b|repetitions/), cW = col(/^weight|weight_(lbs|kg)|^load/), cWarm = col(/warm|set_type/), cDur = col(/duration_seconds|^seconds$|duration\(s\)|^time$/);
     if (cDate < 0 || cEx < 0) throw new Error('Couldn’t find date and exercise columns in that file. It should be a workout export from Fitbod, Strong, Hevy, JEFIT or FitNotes.');
+    const cSetOrder = col(/^set order$/);
     const kg = cW >= 0 && (/kg/.test(head[cW]) || (!/lb/.test(head[cW]) && unitHint === 'kg'));
     const byDay = {};
     let unknown = {};
     for (const r of rows.slice(1)) {
       if (cWarm >= 0 && /true|^1$|yes|warm/i.test(r[cWarm] || '')) continue;
+      if (cSetOrder >= 0 && /^w/i.test((r[cSetOrder] || '').trim())) continue; // Strong marks warm-ups "W"
       const d = parseAnyDate(r[cDate]);
       if (!d) continue;
       const name = (r[cEx] || '').trim();
@@ -732,9 +736,9 @@
         if (!S.custom[id]) S.custom[id] = { id, name, group: FITBOD_GROUP[name] || 'Other', eq: [], kind: 'mid', unit: 'lb', stress: {} };
         unknown[name] = 1;
       }
-      let w = cW >= 0 ? parseFloat(r[cW]) || 0 : 0;
+      let w = cW >= 0 ? num(r[cW]) || 0 : 0;
       if (kg) w = Math.round(w * 2.20462 * 2) / 2;
-      let reps = cReps >= 0 ? parseInt(r[cReps]) || 0 : 0;
+      let reps = cReps >= 0 ? Math.round(num(r[cReps])) || 0 : 0;
       const ex = exInfo(id);
       if (ex.unit === 'sec' && cDur >= 0) reps = parseInt(r[cDur]) || reps;
       if (!reps) continue;
