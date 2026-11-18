@@ -208,7 +208,7 @@
   function sessionsFor(id) {
     const out = [];
     for (const h of S.history) {
-      for (const en of h.entries) if (en.ex === id) out.push({ date: h.date, sets: en.sets.filter((s) => s.done) });
+      for (const en of h.entries) if (en.ex === id) out.push({ date: h.date, sets: en.sets.filter((s) => s.done && !s.warm) });
     }
     return out.filter((s) => s.sets.length);
   }
@@ -219,7 +219,33 @@
   }
 
   // Suggest weight and reps for an exercise this session.
+  // What happened last time beyond the reps: how many sets were planned vs done, and the
+  // "how many more sets could you do" answer (0 = nothing left ... 3 = 3 or more).
+  function lastEntry(id) {
+    for (let k = S.history.length - 1; k >= 0; k--) {
+      const en = S.history[k].entries.find((e) => e.ex === id);
+      if (en) return en;
+    }
+    return null;
+  }
   function target(ex, scheme) {
+    const t = baseTarget(ex, scheme);
+    const en = lastEntry(ex.id);
+    if (!en || t.first) return t;
+    const done = en.sets.filter((s) => s.done && !s.warm).length;
+    // Couldn't finish all the sets: plan what was done (at least 2) and hold the weight.
+    if (en.planned && done < en.planned) { t.sets = Math.max(2, done); t.short = true; }
+    if (ex.unit !== 'lb' || en.left == null) return t;
+    const lastTop = Math.max(...en.sets.map((s) => s.w || 0));
+    if (en.left === 0 || t.short) { if (t.w > lastTop) { t.w = lastTop; t.maxed = false; } }
+    else if (en.left >= 3 && t.w >= lastTop && !ownedDumbbells(ex)) t.w = nudgeW(Math.max(t.w, nudgeW(lastTop, ex, 1)), ex, 1);
+    else if (en.left === 2 && t.w <= lastTop && !ownedDumbbells(ex)) {
+      const hit = en.sets.every((s) => !s.tr || s.r >= s.tr);
+      if (hit) t.w = nudgeW(lastTop, ex, 1);
+    }
+    return t;
+  }
+  function baseTarget(ex, scheme) {
     const reps = ex.unit === 'sec' ? null : scheme.reps[ex.kind];
     const hist = sessionsFor(ex.id);
     const last = hist[hist.length - 1];
@@ -280,7 +306,8 @@
   function makeItem(ex, scheme, slotIdx, dayType) {
     const t = target(ex, scheme);
     const circuit = dayType && DAYS[dayType] && DAYS[dayType].circuit;
-    const n = circuit ? (S.settings.minutes >= 40 ? 4 : 3) : ex.kind === 'core' ? Math.min(3, scheme.sets) : scheme.sets;
+    let n = circuit ? (S.settings.minutes >= 40 ? 4 : 3) : ex.kind === 'core' ? Math.min(3, scheme.sets) : scheme.sets;
+    if (t.sets && !circuit) n = Math.min(n, t.sets);
     const sets = [];
     for (let i = 0; i < n; i++) sets.push({ w: t.w, r: t.r, tr: t.r, done: false });
     return { slot: slotIdx, ex: ex.id, rest: restFor(ex, scheme, dayType), first: !!t.first, maxed: !!t.maxed, sets };
@@ -412,8 +439,20 @@
     const c = S.current;
     if (!c) return null;
     const entries = c.items
-      .map((it) => ({ ex: it.ex, sets: it.sets.filter((s) => s.done).map((s) => ({ w: s.w, r: s.r, tr: s.tr, done: true })) }))
+      .map((it) => {
+        const en = { ex: it.ex, planned: it.sets.filter((s) => !s.warm).length, sets: it.sets.filter((s) => s.done).map((s) => ({ w: s.w, r: s.r, tr: s.tr, done: true, warm: s.warm || undefined })) };
+        if (it.left != null) en.left = it.left;
+        return en;
+      })
       .filter((e) => e.sets.length);
+    // Learn rest: average real rest per exercise, blended with what was used before.
+    c.items.forEach((it) => {
+      const r = (it.rests || []).filter((x) => x >= 10 && x <= 420);
+      if (!r.length) return;
+      const avg = r.reduce((a, b) => a + b, 0) / r.length;
+      const prev = S.rest[it.ex] || it.rest;
+      S.rest[it.ex] = Math.max(15, Math.min(300, Math.round((prev * 0.4 + avg * 0.6) / 5) * 5));
+    });
     const minutes = Math.round((Date.now() - new Date(c.startedAt)) / 60000);
     let rec = null;
     if (entries.length) {
@@ -437,6 +476,9 @@
         const before = Math.max(...prev.map((p) => bestE1rm(p.sets)));
         const now = bestE1rm(en.sets);
         if (now > before + 0.1) out.push({ ex: en.ex, what: 'Est. 1-rep max', val: Math.round(now) + ' lb' });
+        const wb = Math.max(...prev.flatMap((p) => p.sets.map((s) => s.w || 0)));
+        const wn = Math.max(...en.sets.map((s) => s.w || 0));
+        if (wn > wb) out.push({ ex: en.ex, what: 'Heaviest weight', val: wn + ' lb' });
       } else {
         const before = Math.max(...prev.flatMap((p) => p.sets.map((s) => s.r)));
         const now = Math.max(...en.sets.map((s) => s.r));
@@ -559,6 +601,38 @@
     FITBOD_MAP[norm(e.name)] = e.id;
     (e.fitbod || []).forEach((n) => (FITBOD_MAP[norm(n)] = e.id));
   });
+  // Fitbod names that differ from ours. Anything not here and not in the library becomes a custom lift.
+  const FITBOD_ALIAS = {
+    'Dumbbell Lunge': 'walking_lunge', 'Cable Rope Tricep Extension': 'oh_cable_ext', 'Chest Dip': 'dip', 'Shotgun Row': 'sa_cable_row',
+    'Dumbbell Kickbacks': 'db_kickback', 'Lat Pulldown': 'kneel_pulldown', 'Dumbbell Rear Delt Raise': 'rear_delt_fly',
+    'Dumbbell Bent Over Reverse Fly': 'rear_delt_fly', 'Dumbbell Back Fly': 'rear_delt_fly', 'Cross Body Hammer Curls': 'hammer_curl',
+    'Incline Hammer Curl': 'hammer_curl', 'Superman with Scaption': 'superman', 'Superman Hold': 'superman', 'Ab Rollout': 'ab_wheel',
+    'Gorilla Rows': 'kb_gorilla_row', 'EZ-Bar Curl': 'bb_curl', 'Seated Dumbbell Curl': 'db_curl', 'Reverse Barbell Curl': 'reverse_curl',
+    'Standing Dumbbell Shoulder Press': 'standing_db_press', 'Reverse Grip Barbell Bent Over Row': 'bb_row', 'Smith Machine Bent Over Row': 'bb_row',
+    'Sit Up': 'crunch', 'Push Up on Knees': 'knee_pushup', 'Straight-Arm Pulldown': 'straight_arm_pd', 'Dumbbell Tricep Extension': 'db_oh_ext',
+    'Cable Hip Extension': 'cable_kickback_glute',
+  };
+  const FITBOD_GROUP = {
+    'Deadlift': 'Hamstrings', 'Sumo Deadlift': 'Glutes', 'Front Squat': 'Quads', 'Barbell Lunge': 'Quads', 'Box Jump': 'Quads', '1-Step Box Jump': 'Quads',
+    'Standing Barbell Calf Raise': 'Calves', 'Barbell Incline Bench Press': 'Chest', 'Decline Push Up': 'Chest', 'Loop Band Standing Chest Press': 'Chest',
+    'Arnold Dumbbell Press': 'Shoulders', 'Upright Row': 'Shoulders', 'Barbell Shrug': 'Back', 'TRX Row': 'Back', 'Australian Chin Up': 'Back', 'Renegade Row': 'Back',
+    'Good Morning': 'Hamstrings', 'Dumbbell Good Morning': 'Hamstrings', 'Stiff-Legged Barbell Good Morning': 'Hamstrings',
+    'Diamond Push Up': 'Triceps', 'Tricep Push Up': 'Triceps', 'Leg Pull-In': 'Core', 'Burpee': 'Core',
+  };
+  const FITBOD_SKIP = { walking: 1, hiking: 1, running: 1, cycling: 1, elliptical: 1, rowing: 1 };
+  Object.keys(FITBOD_ALIAS).forEach((n) => (FITBOD_MAP[norm(n)] = FITBOD_ALIAS[n]));
+  // Fitbod writes "2026-11-14 23:49:53 +0000", which iPhone Safari can't parse. Read it by hand.
+  function parseDate(v) {
+    v = String(v || '').trim();
+    const m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(?:(Z)|([+-])(\d{2}):?(\d{2})?)?/);
+    if (!m) { const d = new Date(v); return isNaN(d) ? null : d; }
+    const [, y, mo, da, h, mi, se, z, sg, oh, om] = m;
+    if (!z && !sg) return new Date(+y, +mo - 1, +da, +(h || 12), +(mi || 0), +(se || 0));
+    let t = Date.UTC(+y, +mo - 1, +da, +(h || 0), +(mi || 0), +(se || 0));
+    if (sg) t -= (sg === '-' ? -1 : 1) * ((+oh) * 60 + (+(om || 0))) * 60000;
+    return new Date(t);
+  }
+  const localKey = (d) => { d = new Date(d); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   function parseCSV(txt) {
     const rows = [];
     let row = [], cell = '', q = false;
@@ -591,13 +665,14 @@
     let unknown = {};
     for (const r of rows.slice(1)) {
       if (cWarm >= 0 && /true|1|yes/i.test(r[cWarm] || '')) continue;
-      const d = new Date(r[cDate]);
-      if (isNaN(d)) continue;
+      const d = parseDate(r[cDate]);
+      if (!d) continue;
       const name = (r[cEx] || '').trim();
+      if (!name || FITBOD_SKIP[norm(name)]) continue;
       let id = FITBOD_MAP[norm(name)];
       if (!id) {
         id = 'fb_' + norm(name);
-        if (!S.custom[id]) S.custom[id] = { id, name, group: 'Other', eq: [], kind: 'mid', unit: 'lb', stress: {} };
+        if (!S.custom[id]) S.custom[id] = { id, name, group: FITBOD_GROUP[name] || 'Other', eq: [], kind: 'mid', unit: 'lb', stress: {} };
         unknown[name] = 1;
       }
       let w = cW >= 0 ? parseFloat(r[cW]) || 0 : 0;
@@ -607,18 +682,19 @@
       if (ex.unit === 'sec' && cDur >= 0) reps = parseInt(r[cDur]) || reps;
       if (!reps) continue;
       if (S.custom[id] && w === 0) S.custom[id].unit = 'bw';
-      const key = d.toISOString().slice(0, 10);
+      const key = localKey(d);
       byDay[key] = byDay[key] || { date: d.toISOString(), entries: {} };
       if (d < new Date(byDay[key].date)) byDay[key].date = d.toISOString();
       (byDay[key].entries[id] = byDay[key].entries[id] || []).push({ w, r: reps, done: true });
     }
-    const existing = new Set(S.history.map((h) => h.date.slice(0, 10)));
+    const existing = new Set(S.history.map((h) => localKey(h.date)));
     let added = 0;
     for (const k of Object.keys(byDay)) {
       if (existing.has(k)) continue;
       const v = byDay[k];
       const entries = Object.keys(v.entries).map((ex) => ({ ex, sets: v.entries[ex] }));
       const groups = entries.map((e) => exInfo(e.ex).group);
+      if (!entries.length) continue;
       const score = { push: 0, pull: 0, legs: 0 };
       groups.forEach((g) => {
         if (['Chest', 'Shoulders', 'Triceps'].includes(g)) score.push++;
@@ -627,6 +703,7 @@
       });
       const day = Object.keys(score).sort((a, b) => score[b] - score[a])[0];
       S.history.push({ id: 'fb' + k, date: v.date, day, minutes: null, source: 'fitbod', entries });
+      existing.add(k);
       added++;
     }
     S.history.sort((a, b) => new Date(a.date) - new Date(b.date));

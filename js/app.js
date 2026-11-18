@@ -3,7 +3,46 @@
   const E = Engine;
   const $ = (s, r) => (r || document).querySelector(s);
   const app = $('#app'), tabsEl = $('#tabs'), timerEl = $('#timer'), overlay = $('#overlay'), detailEl = $('#detail');
-  const ui = { tab: 'today', plan: null, planDay: null, range: 'month', openLog: null, detail: null, setup: null };
+  const ui = { tab: 'today', plan: null, planDay: null, range: 'month', openLog: null, detail: null, setup: null, summary: null };
+
+  // Patch the DOM in place instead of replacing it. Unchanged nodes (images, the button you're
+  // tapping, a focused field) stay put, so nothing flashes and taps aren't lost mid-render.
+  // Children with data-key are matched by key, so reordered cards move instead of being rebuilt.
+  const keyOf = (n) => (n.nodeType === 1 ? n.getAttribute('data-key') : null);
+  const sameNode = (a, b) => a.nodeType === b.nodeType && (a.nodeType !== 1 || (a.tagName === b.tagName && a.id === b.id));
+  function patchNode(o, n) {
+    if (o.nodeType !== 1) { if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue; return; }
+    for (const at of [...o.attributes]) if (!n.hasAttribute(at.name)) o.removeAttribute(at.name);
+    for (const at of [...n.attributes]) if (o.getAttribute(at.name) !== at.value) o.setAttribute(at.name, at.value);
+    const active = document.activeElement === o;
+    if (o.tagName === 'INPUT') { if (!active && o.value !== (n.getAttribute('value') || '')) o.value = n.getAttribute('value') || ''; o.disabled = n.hasAttribute('disabled'); return; }
+    if (o.tagName === 'TEXTAREA') { if (!active && o.value !== n.textContent) o.value = n.textContent; return; }
+    if (o.tagName === 'BUTTON') o.disabled = n.hasAttribute('disabled');
+    if (o.hasAttribute('data-keep')) return; // live-drawn content (the animated figure)
+    patchKids(o, n);
+  }
+  function patchKids(oldP, newP) {
+    const keyed = {};
+    for (const c of oldP.childNodes) { const k = keyOf(c); if (k) keyed[k] = c; }
+    let cur = oldP.firstChild;
+    for (const n of [...newP.childNodes]) {
+      const k = keyOf(n);
+      let m = null;
+      if (k) { m = keyed[k]; if (m && m.tagName !== n.tagName) m = null; if (m) delete keyed[k]; }
+      else if (cur && !keyOf(cur) && sameNode(cur, n)) m = cur;
+      if (m) { if (m === cur) cur = cur.nextSibling; else oldP.insertBefore(m, cur); patchNode(m, n); }
+      else oldP.insertBefore(n, cur);
+    }
+    while (cur) { const nx = cur.nextSibling; oldP.removeChild(cur); cur = nx; }
+  }
+  function morph(el, html) {
+    const t = document.createElement('template');
+    t.innerHTML = html;
+    patchKids(el, t.content);
+  }
+  // The screens below write app.innerHTML / detailEl.innerHTML; route those writes through morph.
+  const realHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  [app, detailEl].forEach((el) => Object.defineProperty(el, 'innerHTML', { get() { return realHTML.get.call(el); }, set(h) { morph(el, h); } }));
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmtW = (w) => (Math.round(w * 10) / 10).toString();
@@ -11,6 +50,7 @@
   const fmtTime = (d) => new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   const mmss = (s) => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
   const todayKey = () => { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
+  const GRIP = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
   const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   const info = (id) => (window.EXINFO && EXINFO[id]) || { m: [], s: [], steps: [], img: 0 };
   const imgSrc = (id, k) => 'img/ex/' + id + '-' + (k || 0) + '.jpg';
@@ -32,6 +72,7 @@
   function thumb(id, cls) {
     const inf = info(id);
     const ex = E.exInfo(id);
+    if (window.Figure && Figure.has(id)) return `<span class="${cls || 'thumb'} thumb-fig figbg">${Figure.svg(id, 1, 'mini')}</span>`;
     return inf.img
       ? `<img class="${cls || 'thumb'}" src="${imgSrc(id, inf.img > 1 ? 1 : 0)}" alt="" loading="lazy">`
       : `<span class="${cls || 'thumb'} thumb-none">${esc(ex.group.slice(0, 2))}</span>`;
@@ -57,6 +98,8 @@
     renderTabs();
     if (!E.S) { renderSetup(); timerEl.innerHTML = ''; return; }
     app.classList.toggle('has-timer', !!E.S.timer);
+    app.classList.toggle('has-cta', ui.tab === 'today' && !E.S.current && !ui.summary);
+    if (ui.summary) { tabsEl.style.display = 'none'; renderSummary(); renderTimer(); renderDetail(); return; }
     if (ui.tab === 'today') E.S.current ? renderSession() : renderPreview();
     else if (ui.tab === 'log') renderLog();
     else if (ui.tab === 'progress') renderProgress();
@@ -148,14 +191,15 @@
       ${stepCard()}
       ${order.length > 1 ? `<div class="chips" style="margin-top:16px">${order.map((k) => `<button class="chip ${plan.day === k ? 'on' : ''}" data-act="pickday" data-k="${k}">${DAYS[k].name}</button>`).join('')}</div>` : ''}
       ${plan.items.map((it, i) => previewCard(it, i)).join('')}
-      <button class="btn-main" data-act="start">Start workout</button>`;
+      <div class="cta-dock"><button class="btn-main" data-act="start">Start workout</button></div>`;
   }
   function previewCard(it, i) {
     const ex = E.exInfo(it.ex);
-    return `<div class="ex"><div class="ex-head">
+    return `<div class="ex" data-i="${i}" data-key="ex-${it.ex}"><div class="ex-head">
       <button class="ex-open" data-act="detail" data-i="${i}">${thumb(it.ex)}
         <span class="ex-main"><span class="ex-name">${esc(ex.name)}</span>
         <span class="ex-meta">${setLine(ex, it)}${it.first ? ' <span class="first">New lift: start light</span>' : ''}${it.maxed ? ' <span class="first">Ready for heavier weights</span>' : ''}</span></span></button>
+      <span class="drag" data-drag="${i}" aria-label="Drag to reorder" role="button">${GRIP}</span>
       <button class="ex-more" data-act="exmenu" data-i="${i}" aria-label="Options for ${esc(ex.name)}">⋯</button>
     </div></div>`;
   }
@@ -193,11 +237,12 @@
     const ex = E.exInfo(it.ex);
     const done = it.sets.every((s) => s.done);
     const nDone = it.sets.filter((s) => s.done).length;
-    return `<div class="ex ${done ? 'done' : ''}" data-i="${i}">
+    return `<div class="ex ${done ? 'done' : ''}" data-i="${i}" data-key="ex-${it.ex}">
       <div class="ex-head">
         <button class="ex-open" data-act="detail" data-i="${i}">${thumb(it.ex)}
           <span class="ex-main"><span class="ex-name">${esc(ex.name)}</span>
           <span class="ex-meta">${done ? '<span class="donechip">Done</span> ' : ''}${nDone} of ${it.sets.length} sets, ${mmss(it.rest)} rest</span></span></button>
+        <span class="drag" data-drag="${i}" aria-label="Drag to reorder" role="button">${GRIP}</span>
         <button class="ex-more" data-act="exmenu" data-i="${i}" aria-label="Options for ${esc(ex.name)}">⋯</button>
       </div>
       ${!done || it.open ? setRows(it, i, true) : ''}
@@ -210,10 +255,15 @@
     ui.detail = { i, view: view || 'main', tab: 0, q: '' };
     renderDetail();
   }
+  function hideDetail() {
+    document.body.classList.remove('noscroll');
+    const el = $('#detail .detail');
+    if (!el || el.classList.contains('closing')) return;
+    el.classList.add('closing');
+    setTimeout(() => { if (!ui.detail) detailEl.textContent = ''; }, 260);
+  }
   function closeDetail() {
     ui.detail = null;
-    detailEl.innerHTML = '';
-    document.body.classList.remove('noscroll');
     render();
   }
   function coachLine(it) {
@@ -242,17 +292,18 @@
   function renderDetail() {
     clearInterval(flipTimer);
     const d = ui.detail;
-    if (!d || !E.S) { detailEl.innerHTML = ''; document.body.classList.remove('noscroll'); return; }
+    if (!d || !E.S) { hideDetail(); return; }
     const plan = curPlan();
     const it = plan.items[d.i];
-    if (!it) { ui.detail = null; detailEl.innerHTML = ''; return; }
+    if (!it) { ui.detail = null; hideDetail(); return; }
     document.body.classList.add('noscroll');
     const ex = E.exInfo(it.ex);
     const inf = info(it.ex);
     let body = '';
     const head = (title) => `<div class="dv-bar"><button class="dv-back" data-act="dview" data-v="main" aria-label="Back">‹</button><span>${title}</span><span style="width:40px"></span></div>`;
     if (d.view === 'main') {
-      body = `<div class="hero">${inf.img ? `<img id="hero-img" src="${imgSrc(it.ex, 0)}" alt="${esc(ex.name)}">` : `<div class="hero-none">${muscleMap(inf.m.length ? inf.m : [ex.group.toLowerCase()], inf.s)}</div>`}
+      const fig = window.Figure && Figure.has(it.ex);
+      body = `<div class="hero ${fig ? 'figbg' : ''}">${fig ? `<div class="hero-fig" data-keep data-fig="${it.ex}" data-key="fig-${it.ex}"></div>` : inf.img ? `<img id="hero-img" src="${imgSrc(it.ex, 0)}" alt="${esc(ex.name)}">` : `<div class="hero-none">${muscleMap(inf.m.length ? inf.m : [ex.group.toLowerCase()], inf.s)}</div>`}
           <button class="dv-close" data-act="dclose" aria-label="Close">✕</button>
           <div class="hero-foot"><h2 class="hero-name">${esc(ex.name)}</h2><button class="howto-btn" data-act="dview" data-v="howto">▶ How-to</button></div></div>
         <div class="dchips">
@@ -272,7 +323,7 @@
       const tabs = ['Instructions', 'Target', 'Equipment'];
       const eqNames = ex.eq.length ? ex.eq.map((k) => (EQUIPMENT.find((e) => e.id === k) || { name: k }).name) : ['None. Just you.'];
       body = `${head('How-to')}
-        ${inf.img ? `<div class="howto-img"><img id="hero-img" src="${imgSrc(it.ex, 0)}" alt=""></div>` : ''}
+        ${window.Figure && Figure.has(it.ex) ? `<div class="howto-img figbg"><div class="hero-fig" data-keep data-fig="${it.ex}" data-key="figh-${it.ex}"></div></div>` : inf.img ? `<div class="howto-img"><img id="hero-img" src="${imgSrc(it.ex, 0)}" alt=""></div>` : ''}
         <div class="dpad"><h2 class="dv-title">${esc(ex.name)}</h2>
         <div class="seg seg3">${tabs.map((t, k) => `<button class="${d.tab === k ? 'on' : ''}" data-act="dtab" data-k="${k}">${t}</button>`).join('')}</div>
         ${d.tab === 0 ? `<ol class="steps-list">${(inf.steps.length ? inf.steps : ['Move slowly and with control through the full range you can do without pain.']).map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` : ''}
@@ -312,13 +363,16 @@
         <div class="lbl">Notes</div><textarea id="ex-note" placeholder="Seat height, grip, how it felt">${esc(E.S.notes[it.ex] || '')}</textarea>
         <button class="btn-quiet" data-act="savenote">Save note</button>
         ${ex.unit === 'lb' ? '<button class="btn-quiet" data-act="warmup">Add a warm-up set</button>' : ''}
-        <button class="btn-quiet hurt-btn" data-act="painsheet" data-i="${d.i}">Something hurts</button>
         <button class="btn-quiet" data-act="dislike" data-i="${d.i}">I don’t like this one</button>
+        <button class="btn-quiet hurt-btn" data-act="painsheet" data-i="${d.i}">Something hurts</button>
         <button class="btn-quiet btn-danger" data-act="rmex" data-i="${d.i}">Delete from workout</button></div>`;
     }
-    detailEl.innerHTML = `<div class="detail" role="dialog" aria-modal="true" aria-label="${esc(ex.name)}">${body}</div>`;
+    const prev = $('#detail .detail');
+    if (prev && prev.classList.contains('closing')) detailEl.textContent = '';
+    detailEl.innerHTML = `<div class="detail" role="dialog" aria-modal="true" aria-label="${esc(ex.name)}"><div class="dv-body ${d.view === 'main' ? 'v-main' : 'v-sub'}" data-key="v-${d.view}-${d.i}">${body}</div></div>`;
+    document.querySelectorAll('#detail [data-fig]').forEach((el) => { if (!el.firstChild) Figure.mount(el, el.dataset.fig); });
     // photo flips between start and end position, like a slow animation
-    if (inf.img > 1 && (d.view === 'main' || d.view === 'howto') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!(window.Figure && Figure.has(it.ex)) && inf.img > 1 && (d.view === 'main' || d.view === 'howto') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       let k = 0;
       flipTimer = setInterval(() => { const im = $('#hero-img'); if (!im) return clearInterval(flipTimer); k = 1 - k; im.src = imgSrc(it.ex, k); }, 1200);
     }
@@ -368,7 +422,7 @@
   // ---------------- timer ----------------
   let audioCtx = null;
   function unlockAudio() {
-    if (audioCtx) return;
+    if (audioCtx) { if (audioCtx.state !== 'running') audioCtx.resume().catch(() => {}); return; }
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const b = audioCtx.createBuffer(1, 1, 22050);
@@ -377,11 +431,16 @@
     } catch (e) {}
   }
   function beep() {
+    if (!audioCtx || audioCtx.state === 'closed') { audioCtx = null; unlockAudio(); }
     if (!audioCtx) return;
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    [0, 0.22, 0.44].forEach((t, i) => {
+    const go = () => tones();
+    if (audioCtx.state !== 'running') audioCtx.resume().then(go, go); else go();
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  }
+  function tones() {
+    [0, 0.22, 0.44, 0.9, 1.12, 1.34].forEach((t, i) => {
       const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.frequency.value = i === 2 ? 1320 : 880;
+      o.frequency.value = i % 3 === 2 ? 1320 : 880;
       o.connect(g); g.connect(audioCtx.destination);
       const at = audioCtx.currentTime + t;
       g.gain.setValueAtTime(0.0001, at);
@@ -389,10 +448,9 @@
       g.gain.exponentialRampToValueAtTime(0.0001, at + 0.18);
       o.start(at); o.stop(at + 0.2);
     });
-    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
   }
   function startTimer(secs, label) {
-    E.S.timer = { endsAt: Date.now() + secs * 1000, total: secs, label, beeped: false };
+    E.S.timer = { endsAt: Date.now() + secs * 1000, total: secs, base: secs, label, beeped: false };
     E.save();
     renderTimer();
     app.classList.add('has-timer');
@@ -408,12 +466,13 @@
   function renderTimer() {
     const t = E.S && E.S.timer;
     if (!t) { timerEl.innerHTML = ''; return; }
+    if ($('#tdock')) { tick(); return; }
     timerEl.innerHTML = `<div class="timer" id="tdock">
       <div class="stack" id="tstack">${Array.from({ length: PLATES }, () => '<div class="plate"></div>').join('')}</div>
       <div class="timer-body">
         <div class="timer-top"><span class="timer-label" id="tlabel"></span></div>
         <div class="timer-time" id="ttime">0:00</div>
-        <div class="timer-btns"><button data-act="t-" aria-label="15 seconds less">−15</button><button data-act="t+" aria-label="15 seconds more">+15</button><button class="skip" data-act="tskip">Skip</button></div>
+        <div class="timer-btns"><button data-act="t-" aria-label="15 seconds less">−15</button><button data-act="t+" aria-label="15 seconds more">+15</button><button data-act="treset" aria-label="Restart rest timer">↺</button><button class="skip" data-act="tskip">Skip</button></div>
       </div></div>`;
     tick();
   }
@@ -439,7 +498,7 @@
       plates[i].className = 'plate' + (fromBottom < lit ? (fromBottom === lit - 1 ? ' pin' : ' lit') : '');
     }
     if (over && !t.beeped) { t.beeped = true; E.save(); beep(); }
-    if (left < -45) stopTimer();
+    if (left < -600) stopTimer();
   }
   setInterval(tick, 250);
 
@@ -454,7 +513,20 @@
   function sheet(html) {
     overlay.innerHTML = `<div class="scrim" data-act="close"><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div></div>`;
   }
-  function closeSheet() { overlay.innerHTML = ''; }
+  function closeSheet() {
+    const sc = overlay.querySelector('.scrim');
+    if (!sc) return;
+    sc.classList.add('closing');
+    setTimeout(() => { if (overlay.firstChild === sc) overlay.innerHTML = ''; }, 200);
+  }
+  // After the last set of an exercise: how many more sets could you have done? Drives next time's weight.
+  function leftSheet(i) {
+    const it = E.S.current.items[i];
+    ui.leftVal = null;
+    sheet(`<h3>How many more sets could you do?</h3><p>${esc(E.exInfo(it.ex).name)}. Next time’s weight is based on this.</p>
+      <div class="left-grid">${[0, 1, 2, 3].map((v) => `<button class="lft l${v}" data-act="leftpick" data-k="${v}">${v === 3 ? '3+' : v}</button>`).join('')}</div>
+      <button class="btn-main" data-act="leftok" data-i="${i}" disabled>OK</button>`);
+  }
 
   function exMenu(i) {
     const ex = E.exInfo(curPlan().items[i].ex);
@@ -501,6 +573,45 @@
       <p>${label}: ${Math.round(best)} ${ex.unit === 'lb' ? 'lb' : ex.unit === 'sec' ? 'sec' : 'reps'} best</p>
       ${series.length > 1 ? lineChart(series, { h: 170 }) : '<div class="empty">Do this one again to start its chart.</div>'}
       <div style="margin-top:10px">${series.slice().reverse().slice(0, 12).map((p) => `<div class="log-ex" style="margin:0;padding:8px 0"><div><span>${fmtDate(p.date)}</span><span>${ex.unit === 'lb' ? fmtW(p.top.w) + ' lb × ' + p.top.r : p.top.r + (ex.unit === 'sec' ? ' sec' : ' reps')}${ex.unit === 'lb' ? ', est. max ' + Math.round(p.v) : ''}</span></div></div>`).join('')}</div>`);
+  }
+
+  // ---------------- workout summary ----------------
+  function renderSummary() {
+    const h = E.S.history.find((x) => x.id === ui.summary);
+    if (!h) { ui.summary = null; return render(); }
+    const day = DAYS[h.day];
+    const sets = h.entries.reduce((a, e) => a + e.sets.filter((s) => !s.warm).length, 0);
+    const reps = h.entries.reduce((a, e) => a + e.sets.filter((s) => !s.warm).reduce((b, s) => b + s.r, 0), 0);
+    const recs = h.records || [];
+    const rows = h.entries.map((en) => {
+      const ex = E.exInfo(en.ex);
+      const work = en.sets.filter((s) => !s.warm);
+      const sess = E.sessionsFor(en.ex);
+      const prev = sess.length > 1 ? sess[sess.length - 2] : null;
+      let extra = '';
+      if (ex.unit === 'lb') {
+        const now = E.bestE1rm(work), was = prev ? E.bestE1rm(prev.sets) : 0;
+        const dlt = was ? Math.round(now - was) : 0;
+        extra = `<span class="sum-e1">Est. max ${Math.round(now)} lb${dlt ? ` <b class="${dlt > 0 ? 'delta-up' : 'delta-down'}">${dlt > 0 ? '+' : ''}${dlt}</b>` : ''}</span>`;
+      }
+      const top = ex.unit === 'lb' ? work.map((s) => fmtW(s.w) + '×' + s.r).join(', ') : work.map((s) => s.r + (ex.unit === 'sec' ? 's' : '')).join(', ');
+      const pr = recs.some((r) => r.ex === en.ex);
+      return `<div class="sum-row">${thumb(en.ex, 'thumb sm')}<div class="sum-main"><div class="sum-name">${esc(ex.name)}${pr ? ' <span class="badge">PR</span>' : ''}</div><div class="sub">${top}</div>${extra}</div></div>`;
+    }).join('');
+    app.innerHTML = `<div class="summary">
+      <div class="kicker">${fmtDate(h.date, { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+      <h1>Workout done</h1>
+      <div class="sub">${esc(day ? day.name : h.day)}</div>
+      <div class="card stats3 sum-stats"><div class="stat"><div class="v">${h.minutes || 0}</div><div class="k">Minutes</div></div>
+        <div class="stat"><div class="v">${sets}</div><div class="k">Sets</div></div>
+        <div class="stat"><div class="v">${E.volume(h).toLocaleString()}</div><div class="k">Pounds lifted</div></div></div>
+      <h2>${recs.length ? 'Personal records' : 'Achievements'}</h2>
+      <div class="card">${recs.length ? recs.map((r) => `<div class="ach"><span class="ach-ic">★</span><div><b>${esc(E.exInfo(r.ex).name)}</b><small>${esc(r.what)}: ${esc(r.val)}</small></div></div>`).join('') : ''}
+        <div class="ach"><span class="ach-ic dim">✓</span><div><b>${h.entries.length} exercises, ${reps.toLocaleString()} reps</b><small>${recs.length ? 'Nice work.' : 'No records this time. Consistency is what builds it.'}</small></div></div></div>
+      <h2>Exercises</h2>
+      <div class="card">${rows}</div>
+      <div class="cta-dock"><button class="btn-main" data-act="sumdone">Done</button></div>
+    </div>`;
   }
 
   // ---------------- log ----------------
@@ -630,7 +741,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv" hidden>
-      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v1.4</div>`;
+      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v1.5</div>`;
   }
 
   // ---------------- actions ----------------
@@ -685,7 +796,7 @@
       }
       case 'sujake': if (confirm('Load Jake’s gym setup, sore elbows and knees, and his Fitbod history on this phone?')) { E.setup('jake'); ui.setup = null; render(); } break;
 
-      case 'tab': ui.tab = el.dataset.k; ui.detail = null; render(); window.scrollTo(0, 0); break;
+      case 'tab': if (ui.tab !== el.dataset.k) { ui.tab = el.dataset.k; ui.detail = null; app.classList.remove('tabin'); void app.offsetWidth; app.classList.add('tabin'); render(); window.scrollTo(0, 0); } break;
       case 'close': closeSheet(); break;
       case 'pickday': ui.planDay = el.dataset.k; ui.plan = null; render(); break;
       case 'start': E.startWorkout(ensurePlan()); ui.plan = null; ui.planDay = null; keepAwake(); render(); window.scrollTo(0, 0); break;
@@ -706,19 +817,36 @@
       case 'check': {
         const it = c.items[i], st = it.sets[j];
         st.done = !st.done;
-        E.save();
         if (st.done) {
+          // Real rest = time since the last set of this exercise, minus about how long a set takes.
+          const now = Date.now(), ex = E.exInfo(it.ex);
+          if (it.lastAt && !st.warm) {
+            const rest = (now - it.lastAt) / 1000 - (ex.unit === 'sec' ? st.r : 30);
+            if (rest >= 10 && rest <= 420) (it.rests = it.rests || []).push(Math.round(rest));
+          }
+          it.lastAt = now;
+          // Short on reps? Aim the rest of the sets at what you actually got.
+          if (!st.warm && st.tr && st.r < st.tr) it.sets.forEach((x, k) => { if (k > j && !x.done && !x.warm) x.r = st.r; });
           const allDone = c.items.every((x) => x.sets.every((y) => y.done));
           if (!allDone) startTimer(it.rest, nextLabel(c, i, j)); else stopTimer();
           if (it.sets.every((y) => y.done)) it.open = false;
         }
+        E.save();
         render();
-        if (st.done && !ui.detail && c.items[i].sets.every((y) => y.done)) {
-          const next = document.querySelector(`.ex[data-i="${i + 1}"]`);
-          if (next) next.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+        if (st.done && it.sets.every((y) => y.done)) leftSheet(i);
         break;
       }
+      case 'leftpick': ui.leftVal = +el.dataset.k; overlay.querySelectorAll('.lft').forEach((b) => b.classList.toggle('on', b === el)); overlay.querySelector('[data-act="leftok"]').disabled = false; break;
+      case 'leftok': {
+        if (ui.leftVal == null) break;
+        c.items[i].left = ui.leftVal; E.save(); closeSheet();
+        if (ui.detail) closeDetail(); else render();
+        const next = document.querySelector(`.ex[data-i="${i + 1}"]`);
+        if (next) setTimeout(() => next.scrollIntoView({ behavior: 'smooth', block: 'start' }), 280);
+        break;
+      }
+      case 'treset': E.S.timer.endsAt = Date.now() + (E.S.timer.base || E.S.timer.total) * 1000; E.S.timer.total = E.S.timer.base || E.S.timer.total; E.S.timer.beeped = false; E.save(); tick(); break;
+      case 'sumdone': ui.tab = 'log'; ui.openLog = ui.summary; ui.summary = null; render(); window.scrollTo(0, 0); break;
       case 'addset': { const it = curPlan().items[i]; const last = it.sets[it.sets.length - 1]; it.sets.push({ w: last.w, r: last.r, tr: last.tr, done: false }); it.open = true; E.save(); render(); break; }
       case 'rmset': { const it = curPlan().items[i]; const k = it.sets.map((x) => x.done).lastIndexOf(false); it.sets.splice(k >= 0 ? k : it.sets.length - 1, 1); E.save(); render(); break; }
       case 't-': E.S.timer.endsAt -= 15000; E.S.timer.total = Math.max(15, E.S.timer.total - 15); E.save(); tick(); break;
@@ -762,8 +890,8 @@
         if (!anyDone) { toast('Check off at least one set first'); break; }
         const rec = E.finishWorkout(); stopTimer();
         if (wakeLock) { wakeLock.release(); wakeLock = null; }
-        ui.tab = 'log'; ui.openLog = rec && rec.id; ui.plan = null; render(); window.scrollTo(0, 0);
-        toast(rec && rec.records.length ? 'Saved. ' + rec.records.length + ' new record' + (rec.records.length > 1 ? 's' : '') + '!' : 'Workout saved');
+        ui.plan = null; ui.detail = null; ui.summary = rec ? rec.id : null; if (!rec) ui.tab = 'log';
+        render(); window.scrollTo(0, 0);
         break;
       }
       case 'discard': if (confirm('Discard this workout? Nothing will be saved.')) { E.S.current = null; stopTimer(); E.save(); render(); } break;
@@ -796,6 +924,55 @@
       case 'reset': if (confirm('Erase all workouts, pain notes and settings on this phone? This can’t be undone.')) { localStorage.removeItem('spotter.v1'); location.reload(); } break;
     }
   });
+
+  // ---------------- drag to reorder ----------------
+  let drag = null;
+  document.addEventListener('pointerdown', (ev) => {
+    const h = ev.target.closest('[data-drag]');
+    if (!h || !E.S) return;
+    ev.preventDefault();
+    const cards = [...app.querySelectorAll('.ex[data-i]')];
+    const from = +h.dataset.drag;
+    const card = cards[from];
+    if (!card) return;
+    const sy = window.scrollY;
+    drag = { from, to: from, card, cards, y0: ev.pageY, mids: cards.map((c) => { const r = c.getBoundingClientRect(); return r.top + sy + r.height / 2; }), h: card.getBoundingClientRect().height + 10, id: ev.pointerId };
+    card.classList.add('dragging');
+    document.body.classList.add('is-dragging');
+    try { h.setPointerCapture(ev.pointerId); } catch (e) {}
+  });
+  document.addEventListener('pointermove', (ev) => {
+    if (!drag || ev.pointerId !== drag.id) return;
+    if (ev.clientY < 90) window.scrollBy(0, -10); else if (ev.clientY > innerHeight - 150) window.scrollBy(0, 10);
+    const dy = ev.pageY - drag.y0;
+    drag.card.style.transform = `translateY(${dy}px)`;
+    const mid = drag.mids[drag.from] + dy;
+    let to = drag.from;
+    drag.mids.forEach((m, k) => { if (k > drag.from && mid > m) to = k; if (k < drag.from && mid < m && to >= drag.from) to = k; });
+    if (mid < drag.mids[drag.from]) { to = drag.from; for (let k = drag.from - 1; k >= 0; k--) if (mid < drag.mids[k]) to = k; }
+    drag.to = to;
+    drag.cards.forEach((c, k) => {
+      if (c === drag.card) return;
+      const shift = drag.from < to && k > drag.from && k <= to ? -drag.h : drag.from > to && k < drag.from && k >= to ? drag.h : 0;
+      c.style.transform = shift ? `translateY(${shift}px)` : '';
+    });
+  });
+  function endDrag(ev) {
+    if (!drag || (ev && ev.pointerId !== drag.id)) return;
+    const { from, to, cards } = drag;
+    cards.forEach((c) => { c.style.transform = ''; c.classList.remove('dragging'); });
+    document.body.classList.remove('is-dragging');
+    drag = null;
+    if (to !== from) {
+      const items = curPlan().items;
+      const [m] = items.splice(from, 1);
+      items.splice(to, 0, m);
+      E.save();
+      render();
+    }
+  }
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
 
   document.addEventListener('change', (ev) => {
     const t = ev.target;
