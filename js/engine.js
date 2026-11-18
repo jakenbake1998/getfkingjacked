@@ -107,8 +107,15 @@
     for (const k of ['barbell', 'kettlebell', 'cable', 'dumbbell']) if (ex.eq.includes(k)) return k;
     return 'dumbbell';
   }
+  // A gym dumbbell rack: 2.5 lb steps up to 25, then 5 lb steps up to the heaviest pair.
+  function rackList() {
+    const max = S.settings.rackMax || 100, out = [];
+    for (let w = 2.5; w <= Math.min(25, max) + 0.01; w += 2.5) out.push(+w.toFixed(1));
+    for (let w = 30; w <= max; w += 5) out.push(w);
+    return out;
+  }
   function ownedDumbbells(ex) {
-    return primaryEq(ex) === 'dumbbell' && S.settings.dumbbells ? S.settings.dumbbells : null;
+    return primaryEq(ex) === "dumbbell" && S.settings.dumbbells && S.settings.dumbbells.length ? S.settings.dumbbells : null;
   }
   function roundW(w, ex) {
     const t = primaryEq(ex);
@@ -119,12 +126,13 @@
       for (const k of own) if (k <= w + 0.01) best = k;
       return best;
     }
-    if (t === 'kettlebell') {
-      let best = KETTLEBELLS[0];
-      for (const k of KETTLEBELLS) if (Math.abs(k - w) < Math.abs(best - w)) best = k;
+    if (t === 'kettlebell' || t === 'dumbbell') {
+      const L = t === 'kettlebell' ? KETTLEBELLS : rackList();
+      let best = L[0];
+      for (const k of L) if (Math.abs(k - w) < Math.abs(best - w)) best = k;
       return best;
     }
-    const step = t === 'dumbbell' && w < 30 ? 2.5 : 5;
+    const step = 5;
     let r = Math.round(w / step) * step;
     if (t === 'barbell') r = Math.max(45, r);
     return Math.max(step, r);
@@ -132,7 +140,7 @@
   function stepFor(w, ex) {
     const t = primaryEq(ex);
     if (t === 'kettlebell') return null;
-    return t === 'dumbbell' && w < 30 ? 2.5 : 5;
+    return t === 'dumbbell' && w < 25 ? 2.5 : 5;
   }
   function nudgeW(w, ex, dir) {
     const t = primaryEq(ex);
@@ -141,9 +149,10 @@
       const i = own.indexOf(roundW(w, ex));
       return own[Math.min(own.length - 1, Math.max(0, i + dir))];
     }
-    if (t === 'kettlebell') {
-      const i = KETTLEBELLS.indexOf(roundW(w, ex));
-      return KETTLEBELLS[Math.min(KETTLEBELLS.length - 1, Math.max(0, i + dir))];
+    if (t === 'kettlebell' || t === 'dumbbell') {
+      const L = t === 'kettlebell' ? KETTLEBELLS : rackList();
+      const i = L.indexOf(roundW(w, ex));
+      return L[Math.min(L.length - 1, Math.max(0, i + dir))];
     }
     const step = dir > 0 ? stepFor(w, ex) : stepFor(Math.max(0, w - 0.01), ex);
     return Math.max(0, +(w + dir * step).toFixed(1));
@@ -523,7 +532,8 @@
   }
   function rangeStart(range) {
     const now = Date.now();
-    return new Date(now - { week: 7, month: 30, '6m': 182, year: 365 }[range] * DAY);
+    if (range === 'all') return new Date(0);
+    return new Date(now - ({ week: 7, month: 30, '6m': 182, year: 365 }[range] || 30) * DAY);
   }
   // Strength index: average across your lifts of (est. 1RM now ÷ est. 1RM the first time) × 100.
   // A lift counts once you have done it twice. 100 = where you started.
@@ -716,6 +726,40 @@
     return { added, unknown: Object.keys(unknown) };
   }
 
+  // ---------- muscle recovery (estimate) ----------
+  // Each hard set leaves some fatigue on the muscles it trains (main group fully, helpers half).
+  // Fatigue clears over about 48 h for a normal session, longer when there was a lot of work or you
+  // said you had nothing left (0 more sets). Recovery % = 100 − remaining fatigue.
+  const HELPERS = { Chest: ['Triceps', 'Shoulders'], Back: ['Biceps'], Shoulders: ['Triceps'], Quads: ['Glutes'], Hamstrings: ['Glutes'], Glutes: ['Hamstrings'] };
+  function recovery() {
+    const now = Date.now(), load = {};
+    for (const h of S.history) {
+      const hrs = (now - new Date(h.date)) / 3600000;
+      if (hrs > 24 * 6 || hrs < 0) continue;
+      for (const en of h.entries) {
+        const g = exInfo(en.ex).group;
+        const sets = en.sets.filter((x) => !x.warm).length;
+        if (!sets || g === 'Other') continue;
+        const hard = en.left === 0 ? 1.35 : en.left === 1 ? 1.15 : en.left >= 3 ? 0.8 : 1;
+        const add = (grp, k) => { (load[grp] = load[grp] || []).push({ hrs, sets: sets * k * hard }); };
+        add(g, 1);
+        (HELPERS[g] || []).forEach((x) => add(x, 0.5));
+      }
+    }
+    const out = [];
+    for (const g of Object.keys(load)) {
+      let fatigue = 0;
+      for (const x of load[g]) {
+        const full = 36 + Math.min(48, x.sets * 5); // hours to clear: 3 sets ≈ 51 h, 8 sets ≈ 76 h
+        fatigue += Math.min(1, x.sets / 8) * Math.max(0, 1 - x.hrs / full);
+      }
+      const pct = Math.round(100 * Math.max(0, 1 - Math.min(1, fatigue)));
+      const last = Math.min(...load[g].map((x) => x.hrs));
+      out.push({ group: g, pct, hoursAgo: Math.round(last) });
+    }
+    return out.sort((a, b) => a.pct - b.pct);
+  }
+
   // ---------- body weight ----------
   function logWeight(lb) {
     const k = localKey(new Date());
@@ -812,6 +856,6 @@
     save, EX, exInfo, e1rm, roundW, nudgeW, blockInfo, nextDayType, blockedBy, allowed, generate, avoidedFor,
     swapItem, swapOptions, swapTo, startWorkout, finishWorkout, reportPain, dislike, unban, volume, rangeStart,
     strengthSeries, liftSeries, setsByGroup, weekStart, liftsTrained, GROUPS, WEEKLY_TARGET, sessionsFor, bestE1rm,
-    exportJSON, importJSON, importFitbod, logWeight, bodyweight, standings, exportForClaude, LEVELS, localKey, summaryForClaude, banActive, reset() { localStorage.removeItem(KEY); S = null; },
+    exportJSON, importJSON, importFitbod, rackList, recovery, logWeight, bodyweight, standings, exportForClaude, LEVELS, localKey, summaryForClaude, banActive, reset() { localStorage.removeItem(KEY); S = null; },
   };
 })();

@@ -112,7 +112,10 @@
   }
 
   // ---------------- first-run setup ----------------
-  const DB_CHOICES = [2.5, 3, 5, 8, 10, 12, 15, 20, 25, 30, 35, 40, 50];
+  // Dumbbell sizes in the same steps as a gym rack (2.5s to 25, then 5s to 100), plus odd home sizes
+  const DB_CHOICES = (() => { const o = []; for (let w = 2.5; w <= 25.01; w += 2.5) o.push(+w.toFixed(1)); for (let w = 30; w <= 100; w += 5) o.push(w); return o; })();
+  const DB_ODD = [3, 8, 12];
+  const dbGrid = (sel, act) => `<div class="db-grid">${DB_CHOICES.concat(DB_ODD.filter((x) => !DB_CHOICES.includes(x))).sort((a, b) => a - b).map((w) => `<button class="dbc ${sel.includes(w) ? 'on' : ''} ${DB_ODD.includes(w) && !DB_CHOICES.includes(w) ? 'odd' : ''}" data-act="${act}" data-v="${w}">${w}</button>`).join('')}</div>`;
   function renderSetup() {
     const s = ui.setup || (ui.setup = { name: '', place: 'home', goal: 'tone', split: 'glute', minutes: 40, dumbbells: [5, 12], joints: {}, stepGoal: 8000 });
     const opt = (key, val, label, sub) => `<button class="pick ${s[key] === val ? 'on' : ''}" data-act="su" data-k="${key}" data-v="${val}">${label}${sub ? `<small>${sub}</small>` : ''}</button>`;
@@ -129,7 +132,7 @@
         <div class="picks two">${opt('place', 'home', 'At home', 'Dumbbells and bodyweight')}${opt('place', 'gym', 'At a gym', 'Racks, cables, machines')}</div>
 
         ${s.place === 'home' ? `<div class="lbl">Which dumbbells do you have?</div>
-        <div class="chips">${DB_CHOICES.map((w) => `<button class="chip ${s.dumbbells.includes(w) ? 'on' : ''}" data-act="sudb" data-v="${w}">${w} lb</button>`).join('')}</div>` : ''}
+        <div class="lbl-sub" style="margin:-4px 0 8px">Tap each pair you own (lb)</div>${dbGrid(s.dumbbells, 'sudb')}` : ''}
 
         <div class="lbl">Main goal</div>
         <div class="picks two">${opt('goal', 'tone', 'Tone and lose weight', 'More reps, short rests')}${opt('goal', 'strength', 'Get stronger', 'Heavier weights, longer rests')}</div>
@@ -186,10 +189,10 @@
     app.innerHTML = `
       <div class="top"><div>
         <div class="kicker">${nm ? esc(nm) + ', ' : ''}${fmtDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })}</div>
-        <h1>${esc(day.name)}</h1>
+        <h1 class="day-title">${esc(day.name)}</h1>
       </div><button class="lib-btn" data-act="openlib" aria-label="All exercises"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Exercises</span></button></div>
-      <div class="sub">Block ${plan.block + 1}, week ${plan.week + 1} of 4. About ${plan.estMin} min, ${plan.items.length} exercises${day.circuit ? ', done as a circuit' : ''}.</div>
-      ${blockBar(plan.week)}
+      <div class="block-box"><div class="block-top"><span>Block ${plan.block + 1} · Week ${plan.week + 1} of 4</span><span>~${plan.estMin} min · ${plan.items.length} exercises${day.circuit ? ' · circuit' : ''}</span></div>
+      ${blockBar(plan.week)}</div>
       ${avoidNote(plan.day)}
       ${stepCard()}
       ${order.length > 1 ? `<div class="chips" style="margin-top:16px">${order.map((k) => `<button class="chip ${plan.day === k ? 'on' : ''}" data-act="pickday" data-k="${k}">${DAYS[k].name}</button>`).join('')}</div>` : ''}
@@ -214,7 +217,7 @@
     app.innerHTML = `
       <div class="top"><div>
         <div class="kicker">${E.schemeFor(c.week).name} week</div>
-        <h1>${esc(day.name)}</h1>
+        <h1 class="day-title">${esc(day.name)}</h1>
       </div><div class="top-r"><button class="lib-btn" data-act="openlib" aria-label="All exercises"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Exercises</span></button><div class="elapsed" id="elapsed">${mmss((Date.now() - new Date(c.startedAt)) / 1000)}</div></div></div>
       ${c.items.map((it, i) => sessionCard(it, i)).join('')}
       <button class="btn-quiet" data-act="addex">Add an exercise</button>
@@ -343,10 +346,10 @@
           <button class="dv-close" data-act="${lib ? 'libback' : 'dclose'}" aria-label="${lib ? 'Back to exercises' : 'Close'}">${lib ? BACKICON : XICON}</button>
           <div class="hero-foot"><h2 class="hero-name">${esc(ex.name)}</h2><button class="howto-btn" data-act="dview" data-v="howto">▶ How-to</button></div></div>
         <div class="dchips">
-          ${lib ? '' : `<button class="dchip" data-act="restpick">⏱ ${mmss(it.rest)} rest</button>`}
-          <button class="dchip" data-act="dview" data-v="history">History</button>
-          ${lib ? '' : `<button class="dchip" data-act="dview" data-v="replace">Replace</button>
-          <button class="dchip" data-act="dview" data-v="more">More</button>`}
+          ${lib ? '' : `<button class="dchip" data-act="restpick"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg>${mmss(it.rest)}</button>`}
+          <button class="dchip" data-act="dview" data-v="history"><svg viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v4h4M12 8v4.5l3 2"/></svg>History</button>
+          ${lib ? '' : `<button class="dchip" data-act="dview" data-v="replace"><svg viewBox="0 0 24 24"><path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5"/></svg>Replace</button>
+          <button class="dchip" data-act="dview" data-v="more"><svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/></svg>More</button>`}
         </div>
         <div class="dpad">
           <div class="muscle-line">${esc(muscleLine(it.ex))}</div>
@@ -748,29 +751,30 @@
       .map((id) => ({ id, ex: E.exInfo(id), s: E.liftSeries(id) }))
       .filter((l) => l.s.some((p) => p.date >= since))
       .sort((a, b) => b.s.length - a.s.length || a.ex.name.localeCompare(b.ex.name));
-    const rangeName = { week: 'this week', month: 'this month', '6m': 'in 6 months', year: 'this year' }[ui.range];
+    const rangeName = { week: 'this week', month: 'this month', '6m': 'in 6 months', year: 'this year', all: 'all time' }[ui.range];
     const deltaIn = (ser) => { const inR = ser.filter((p) => p.date >= since); if (!inR.length) return null; const base = ser.filter((p) => p.date < since).pop() || inR[0]; return inR[inR.length - 1].v - base.v; };
     const std = E.standings();
     const W = E.S.weights || [];
     const wIn = W.filter((x) => new Date(x.date) >= since);
-    app.innerHTML = `<div class="top"><div><div class="kicker">Strength vs. where you started</div><h1>Progress</h1></div></div>
-      <div class="seg">${[['week', 'Week'], ['month', 'Month'], ['6m', '6 months'], ['year', 'Year']].map(([k, n]) => `<button class="${ui.range === k ? 'on' : ''}" data-act="range" data-k="${k}">${n}</button>`).join('')}</div>
+    const fold = (k, title, sum, body) => { const o = ui.open && ui.open[k]; return `<div class="fold ${o ? 'open' : ''}"><button class="fold-h" data-act="fold" data-k="${k}" aria-expanded="${!!o}"><span class="fold-t">${title}</span><span class="fold-s">${sum}</span><svg class="fold-c" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></button>${o ? `<div class="fold-b">${body}</div>` : ''}</div>`; };
+    app.innerHTML = `<div class="top"><div class="title-i"><h1>Progress</h1><button class="info-btn inline" data-act="idxinfo" aria-label="How progress is measured">i</button></div></div>
+      <div class="seg">${[['month', 'Month'], ['6m', '6 months'], ['year', 'Year'], ['all', 'All time']].map(([k, n]) => `<button class="${ui.range === k ? 'on' : ''}" data-act="range" data-k="${k}">${n}</button>`).join('')}</div>
       <div class="card">
-        <button class="info-btn" data-act="idxinfo" aria-label="How the strength index works">i</button>
         ${cur != null ? `<div class="big-num">${Math.round(cur)}<small>strength index</small></div>
-          <div class="sub">${delta != null ? `<span class="${delta >= 0 ? 'delta-up' : 'delta-down'}">${delta >= 0 ? 'Up' : 'Down'} ${Math.abs(delta).toFixed(1)}</span> this ${{ week: 'week', month: 'month', '6m': '6 months', year: 'year' }[ui.range]}. 100 is where each lift started.` : '100 is where each lift started.'}</div>
+          <div class="sub">${delta != null ? `<span class="${delta >= 0 ? 'delta-up' : 'delta-down'}">${delta >= 0 ? 'Up' : 'Down'} ${Math.abs(delta).toFixed(1)}</span> ${rangeName}. 100 is where each lift started.` : '100 is where each lift started.'}</div>
           ${shown.length > 1 ? lineChart(shown, { unit: '' }) : '<div class="empty">Not enough workouts in this range for a chart yet.</div>'}`
         : `<div class="big-num">100<small>strength index</small></div><div class="empty">Your chart starts once you repeat a lift. Each lift starts at 100 and the number climbs as you get stronger.</div>`}
       </div>
-      ${groups.length ? `<h2>By muscle</h2><div class="card">${groups.map((x) => { const last = x.s[x.s.length - 1].v; return `<div class="lift"><div class="nm">${x.g}</div>${spark(x.s.slice(-8))}<div class="val">${Math.round(last)}</div></div>`; }).join('')}</div>` : ''}
-      <h2>Sets this week</h2>
-      <div class="card bars">${E.GROUPS.map((g) => { const n = week[g], t = E.WEEKLY_TARGET[g]; return `<div class="b"><span>${g}</span><div class="track"><div class="fill ${n >= t ? 'met' : ''}" style="width:${Math.min(100, (n / t) * 100)}%"></div></div><span class="n">${n} / ${t}</span></div>`; }).join('')}</div>
-      <h2>How you compare <button class="info-btn inline" data-act="stdinfo" aria-label="How the comparison works">i</button></h2>
-      <div class="card">${std === null ? `<div class="empty">Add your body weight, sex and age in the Body tab to see where your lifts rank, from beginner to elite.</div>` : std.length ? std.map((x) => `<div class="std"><div class="std-top"><b>${esc(x.name)}</b><span class="std-lv">${x.level}</span></div>
+      ${groups.length ? fold('muscle', 'By muscle', groups.slice().sort((x, y) => y.s[y.s.length - 1].v - x.s[x.s.length - 1].v).slice(0, 2).map((x) => x.g + ' ' + Math.round(x.s[x.s.length - 1].v)).join(' · '),
+        `<div class="card">${groups.map((x) => { const last = x.s[x.s.length - 1].v; return `<div class="lift"><div class="nm">${x.g}</div>${spark(x.s.slice(-8))}<div class="val">${Math.round(last)}</div></div>`; }).join('')}</div>`) : ''}
+      ${fold('sets', 'Sets this week', (() => { const n = E.GROUPS.reduce((a, g) => a + week[g], 0), t = E.GROUPS.reduce((a, g) => a + E.WEEKLY_TARGET[g], 0); return n + ' of ' + t; })(),
+        `<div class="card bars">${E.GROUPS.map((g) => { const n = week[g], t = E.WEEKLY_TARGET[g]; return `<div class="b"><span>${g}</span><div class="track"><div class="fill ${n >= t ? 'met' : ''}" style="width:${Math.min(100, (n / t) * 100)}%"></div></div><span class="n">${n} / ${t}</span></div>`; }).join('')}</div>`)}
+      ${fold('compare', 'How you compare', std === null ? 'Add your info' : std.length ? std[0].name + ': ' + std[0].level : 'No standard lifts yet',
+        `<div class="card"><button class="info-btn" data-act="stdinfo" aria-label="How the comparison works">i</button>${std === null ? `<div class="empty">Add your body weight, sex and age in the Body tab to see where your lifts rank, from beginner to elite.</div>` : std.length ? std.map((x) => `<div class="std"><div class="std-top"><b>${esc(x.name)}</b><span class="std-lv">${x.level}</span></div>
           <div class="std-bar"><i style="left:${(x.pos * 100).toFixed(1)}%"></i></div><div class="std-scale">${E.LEVELS.map((l) => `<span>${l}</span>`).join('')}</div>
-          <div class="sub">Est. max ${x.e1rm} lb${x.from && E.exInfo(x.from).eq.includes('dumbbell') ? ' (barbell equivalent)' : ''}, ${x.ratio.toFixed(2)}× body weight.${x.next ? ` ${x.nextLevel} at about ${x.next} lb.` : ''}</div></div>`).join('') : '<div class="empty">None of your logged lifts match the standard lifts (bench, overhead press, squat, deadlift, row) yet.</div>'}</div>
-      ${W.length ? `<h2>Body weight</h2><div class="card"><div class="big-num">${fmtW(W[W.length - 1].lb)}<small>lb</small></div>
-        ${wIn.length > 1 ? `<div class="sub">${(() => { const dw = wIn[wIn.length - 1].lb - wIn[0].lb; return dw ? `<span class="${dw < 0 ? 'delta-up' : 'delta-down'}">${dw > 0 ? '+' : ''}${fmtW(dw)} lb</span> ${rangeName}` : 'No change ' + rangeName; })()}</div>${lineChart(wIn.map((x) => ({ date: new Date(x.date), v: x.lb })), { h: 140, unit: 'lb' })}` : '<div class="sub">Log it a few times to see a chart.</div>'}</div>` : ''}
+          <div class="sub">Est. max ${x.e1rm} lb${x.from && E.exInfo(x.from).eq.includes('dumbbell') ? ' (barbell equivalent)' : ''}, ${x.ratio.toFixed(2)}× body weight.${x.next ? ` ${x.nextLevel} at about ${x.next} lb.` : ''}</div></div>`).join('') : '<div class="empty">None of your logged lifts match the standard lifts (bench, overhead press, squat, deadlift, row) yet.</div>'}</div>`)}
+      ${W.length ? fold('bw', 'Body weight', fmtW(W[W.length - 1].lb) + ' lb', `<div class="card"><div class="big-num">${fmtW(W[W.length - 1].lb)}<small>lb</small></div>
+        ${wIn.length > 1 ? `<div class="sub">${(() => { const dw = wIn[wIn.length - 1].lb - wIn[0].lb; return dw ? `<span class="${dw < 0 ? 'delta-up' : 'delta-down'}">${dw > 0 ? '+' : ''}${fmtW(dw)} lb</span> ${rangeName}` : 'No change ' + rangeName; })()}</div>${lineChart(wIn.map((x) => ({ date: new Date(x.date), v: x.lb })), { h: 140, unit: 'lb' })}` : '<div class="sub">Log it a few times to see a chart.</div>'}</div>`) : ''}
       <h2>Lifts <span class="h2-sub">change ${rangeName}</span></h2>
       <div class="card">${lifts.length ? lifts.map((l) => { const last = l.s[l.s.length - 1]; const d = deltaIn(l.s); return `<button class="lift" data-act="lift" data-id="${l.id}">${thumb(l.id, 'thumb sm')}<div class="nm">${esc(l.ex.name)}<small>${l.s.length} session${l.s.length > 1 ? 's' : ''}${d ? `, <span class="${d > 0 ? 'delta-up' : 'delta-down'}">${d > 0 ? '+' : ''}${Math.round(d)}</span> ${rangeName}` : ''}</small></div>${spark(l.s)}<div class="val">${Math.round(last.v)}<small style="color:var(--muted)">${l.ex.unit === 'lb' ? 'est. max' : l.ex.unit === 'sec' ? 'sec' : 'reps'}</small></div></button>`; }).join('') : '<div class="empty">No lifts in this range.</div>'}</div>
       <button class="btn-quiet" data-act="openlib">See all exercises</button>
@@ -795,12 +799,16 @@
       <h2>Pain log</h2>
       <div class="card">${S.painLog.length ? S.painLog.slice().reverse().slice(0, 12).map((p) => `<div class="pain"><b>${fmtDate(p.at, { month: 'short', day: 'numeric' })}: ${esc((JOINTS.find((j) => j.id === p.joint) || { name: 'Other' }).name)}, ${esc(p.severity)}</b>${p.ex ? ` <span>on ${esc(E.exInfo(p.ex).name.toLowerCase())}</span>` : ''}${p.note ? `<br><span>${esc(p.note)}</span>` : ''}</div>`).join('') : '<div class="empty">No pain logged.</div>'}</div>
 
+      <h2>Muscle recovery <button class="info-btn inline" data-act="recinfo" aria-label="How recovery is estimated">i</button></h2>
+      ${(() => { const all = E.recovery(); const rec = all.filter((r) => r.pct < 90); const fresh = E.GROUPS.filter((g) => !rec.some((r) => r.group === g)); return `<div class="card">${rec.length ? rec.map((r) => `<div class="rec-row"><span class="rec-g">${r.group}</span><div class="track"><div class="fill ${r.pct >= 90 ? 'met' : r.pct < 50 ? 'low' : ''}" style="width:${r.pct}%"></div></div><span class="rec-p">${r.pct}%</span><small>${r.pct >= 90 ? 'Ready' : 'Trained ' + (r.hoursAgo < 24 ? r.hoursAgo + ' h ago' : Math.round(r.hoursAgo / 24) + ' d ago')}</small></div>`).join('') : ''}
+        ${fresh.length ? `<div class="rec-ready" style="margin-top:${rec.length ? 10 : 0}px"><b>Ready:</b> ${fresh.join(', ')}</div>` : ''}</div>`; })()}
+
       <h2>Body weight</h2>
       <div class="card"><div class="bw-row"><input id="bw-in" class="text-in" inputmode="decimal" placeholder="${E.bodyweight() ? fmtW(E.bodyweight()) : 'Weight'}" aria-label="Body weight in pounds"><span class="bw-u">lb</span><button class="btn-small" data-act="bwsave">Save</button></div>
         <div class="sub" style="margin-top:8px">${E.bodyweight() ? `Last: ${fmtW(E.bodyweight())} lb on ${fmtDate(S.weights[S.weights.length - 1].date, { month: 'short', day: 'numeric' })}. Chart is on the Progress tab.` : 'Log it now and then. The chart shows on Progress.'}</div></div>
 
       <h2>About you</h2>
-      <div class="sub" style="margin:0 4px 8px">Used to compare your lifts with strength standards.</div>
+      <div class="about-note ${P.sex && P.age && E.bodyweight() ? 'ok' : ''}">${P.sex && P.age && E.bodyweight() ? `✓ Your lifts are rated against strength standards for ${P.sex === 'f' ? 'women' : 'men'} around ${P.age} at ${fmtW(E.bodyweight())} lb. See How you compare on Progress.` : `Add ${[!P.sex && 'sex', !P.age && 'age', !E.bodyweight() && 'body weight'].filter(Boolean).join(', ')} to rate your lifts against strength standards (Progress → How you compare).`}</div>
       <div class="chips"><button class="chip ${P.sex === 'm' ? 'on' : ''}" data-act="sex" data-k="m">Male</button><button class="chip ${P.sex === 'f' ? 'on' : ''}" data-act="sex" data-k="f">Female</button></div>
       <div class="about-row"><label>Age<input id="age-in" class="text-in" inputmode="numeric" value="${P.age || ''}" placeholder="—"></label>
         <label>Height<span class="ht"><input id="ht-ft" class="text-in" inputmode="numeric" value="${P.heightIn ? Math.floor(P.heightIn / 12) : ''}" placeholder="ft"><input id="ht-in" class="text-in" inputmode="numeric" value="${P.heightIn ? P.heightIn % 12 : ''}" placeholder="in"></span></label></div>
@@ -824,8 +832,11 @@
 
       <h2>Your equipment</h2>
       <div class="card">${EQUIPMENT.map((e) => `<div class="toggle"><span>${esc(e.name)}</span><button class="sw ${S.settings.equipment[e.id] ? 'on' : ''}" data-act="eq" data-k="${e.id}" role="switch" aria-checked="${!!S.settings.equipment[e.id]}" aria-label="${esc(e.name)}"></button></div>`).join('')}</div>
-      ${S.settings.equipment.dumbbell ? `<div class="lbl">Dumbbells you own <span class="lbl-sub">${S.settings.dumbbells ? '' : 'Off: a full gym rack'}</span></div>
-      <div class="chips">${DB_CHOICES.map((w) => `<button class="chip ${S.settings.dumbbells && S.settings.dumbbells.includes(w) ? 'on' : ''}" data-act="dbown" data-v="${w}">${w} lb</button>`).join('')}<button class="chip ${S.settings.dumbbells ? '' : 'on'}" data-act="dbrack">Full rack</button></div>` : ''}
+      ${S.settings.equipment.dumbbell ? (() => { const pairs = S.settings.dbMode === 'pairs' || (S.settings.dumbbells && S.settings.dumbbells.length); const max = S.settings.rackMax || 100; return `<h2>Dumbbells</h2>
+      <div class="seg seg2"><button class="${pairs ? '' : 'on'}" data-act="dbmode" data-k="rack">Gym rack</button><button class="${pairs ? 'on' : ''}" data-act="dbmode" data-k="pairs">Only certain pairs</button></div>
+      ${pairs ? `<div class="card"><div class="sub" style="margin-bottom:10px">Tap each pair you own (lb). Weights only go up through these.</div>${dbGrid(S.settings.dumbbells || [], 'dbown')}</div>`
+        : `<div class="card"><div class="rack-line"><b>2.5 – 25 lb</b><span>in 2.5 lb steps</span></div><div class="rack-line"><b>30 – ${max} lb</b><span>in 5 lb steps</span></div>
+          <div class="lbl" style="margin-top:12px">Heaviest pair</div><div class="chips">${[50, 75, 100, 120, 150].map((m) => `<button class="chip ${max === m ? 'on' : ''}" data-act="rackmax" data-k="${m}">${m} lb</button>`).join('')}</div></div>`}`; })() : ''}
 
       <h2>Your data</h2>
       <div class="sub">Everything is saved on this phone only. Back it up now and then.</div>
@@ -835,7 +846,7 @@
       <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
       <input type="file" id="filebk" accept=".json,application/json" hidden>
       <input type="file" id="filefb" accept=".csv,text/csv" hidden>
-      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v1.7</div>`;
+      <div class="sub" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v1.8</div>`;
   }
 
   // ---------------- actions ----------------
@@ -1004,7 +1015,8 @@
       case 'methodinfo': infoSheet('method'); break;
       case 'stdinfo': infoSheet('standards'); break;
       case 'bwsave': { const v = parseFloat(($('#bw-in') || {}).value); if (!(v > 50 && v < 700)) { toast('Type your weight in pounds'); break; } E.logWeight(Math.round(v * 10) / 10); toast('Weight saved'); render(); break; }
-      case 'sex': E.S.profile.sex = el.dataset.k; E.save(); render(); break;
+      case 'sex': E.S.profile.sex = el.dataset.k; E.save(); render(); toast('Saved: ' + (el.dataset.k === 'f' ? 'female' : 'male')); break;
+      case 'recinfo': sheet(`<h3>Muscle recovery</h3><p>An estimate of how recovered each muscle group is, not a measurement.</p><ol class="steps-list"><li>Every hard set adds fatigue to the muscle it trains. Helper muscles get half (bench press tires triceps and shoulders a bit too).</li><li>Fatigue clears over about 2 days after a normal session, up to 3 or more after a big one.</li><li>Your answer to “how many more sets could you do” counts: 0 left means slower recovery, 3+ means faster.</li><li>Around 90% or more is ready to train hard again.</li></ol>`); break;
       case 'copyclaude': {
         const txt = E.exportForClaude(+el.dataset.k || 30);
         (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Copied. Paste it into Claude'), () => { sheet(`<h3>Copy this</h3><textarea style="min-height:300px">${esc(txt)}</textarea>`); });
@@ -1016,8 +1028,11 @@
       case 'mins': E.S.settings.minutes = +el.dataset.k; E.save(); afterPlanChange(); render(); break;
       case 'prof': { const v = el.dataset.v; E.S.profile[el.dataset.k] = isNaN(+v) ? v : +v; if (el.dataset.k === 'split') { E.S.rotIdx = 0; ui.planDay = null; } E.save(); afterPlanChange(); render(); break; }
       case 'eq': E.S.settings.equipment[el.dataset.k] = !E.S.settings.equipment[el.dataset.k]; E.save(); afterPlanChange(); render(); break;
-      case 'dbown': { const w = +el.dataset.v; const cur = E.S.settings.dumbbells || []; const nx = cur.includes(w) ? cur.filter((x) => x !== w) : cur.concat(w).sort((a, b) => a - b); E.S.settings.dumbbells = nx.length ? nx : null; E.save(); afterPlanChange(); render(); break; }
+      case 'dbown': { const w = +el.dataset.v; const cur = E.S.settings.dumbbells || []; const nx = cur.includes(w) ? cur.filter((x) => x !== w) : cur.concat(w).sort((a, b) => a - b); E.S.settings.dumbbells = nx; E.S.settings.dbMode = 'pairs'; E.save(); afterPlanChange(); render(); break; }
       case 'dbrack': E.S.settings.dumbbells = null; E.save(); afterPlanChange(); render(); break;
+      case 'dbmode': if (el.dataset.k === 'rack') { if (E.S.settings.dumbbells && E.S.settings.dumbbells.length) E.S.settings.dbPairs = E.S.settings.dumbbells; E.S.settings.dumbbells = null; E.S.settings.dbMode = 'rack'; } else { E.S.settings.dbMode = 'pairs'; E.S.settings.dumbbells = E.S.settings.dbPairs || E.S.settings.dumbbells || []; } E.save(); afterPlanChange(); render(); break;
+      case 'rackmax': E.S.settings.rackMax = +el.dataset.k; E.save(); afterPlanChange(); render(); toast('Heaviest pair: ' + el.dataset.k + ' lb'); break;
+      case 'fold': ui.open = ui.open || {}; ui.open[el.dataset.k] = !ui.open[el.dataset.k]; render(); break;
       case 'copysum': {
         const txt = E.summaryForClaude();
         (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Copied. Paste it to Claude'), () => { sheet(`<h3>Copy this</h3><textarea style="min-height:300px">${esc(txt)}</textarea>`); });
@@ -1057,6 +1072,7 @@
     const tx = Math.max(2, Math.min(vb.width - 96, best[0] - 46));
     tip.setAttribute('transform', `translate(${tx} 0)`);
   }
+  document.addEventListener('touchmove', (ev) => { if (scrub) ev.preventDefault(); }, { passive: false });
   document.addEventListener('pointerdown', (ev) => {
     const svg = ev.target.closest && ev.target.closest('svg.chart[data-pts]');
     if (!svg) return;
@@ -1076,6 +1092,7 @@
     if (from < 0) return;
     const sy = window.scrollY;
     drag = { from, to: from, card: st.card, cards, y0: st.y + sy, lastY: st.y, mids: cards.map((c) => { const r = c.getBoundingClientRect(); return r.top + sy + r.height / 2; }), h: st.card.getBoundingClientRect().height + 10, id: st.id };
+    st.card.classList.remove('pressing');
     st.card.classList.add('dragging');
     document.body.classList.add('is-dragging');
     eatClick = true;
@@ -1107,7 +1124,10 @@
   const cancelHold = () => { if (hold) { clearTimeout(hold.t); hold.card.classList.remove('pressing'); hold = null; } };
   document.addEventListener('pointermove', (ev) => {
     if (hold && ev.pointerId === hold.id && Math.hypot(ev.clientX - hold.x, ev.clientY - hold.y) > 8) cancelHold();
-    if (drag && ev.pointerId === drag.id) moveDrag(ev.clientY);
+    if (drag && ev.pointerId === drag.id) {
+      drag.pendY = ev.clientY;
+      if (!drag.raf) drag.raf = requestAnimationFrame(() => { if (!drag) return; drag.raf = 0; moveDrag(drag.pendY); });
+    }
   });
   // While dragging, stop the page from scrolling under your finger; scroll it ourselves near the edges.
   document.addEventListener('touchmove', (ev) => { if (drag) ev.preventDefault(); }, { passive: false });
@@ -1171,8 +1191,8 @@
       render();
     } else if (t.id === 'age-in' || t.id === 'ht-ft' || t.id === 'ht-in') {
       const P = E.S.profile;
-      if (t.id === 'age-in') { const v = parseInt(t.value, 10); P.age = v > 10 && v < 100 ? v : null; }
-      else { const ft = parseInt(($('#ht-ft') || {}).value, 10) || 0, inch = parseInt(($('#ht-in') || {}).value, 10) || 0; P.heightIn = ft ? ft * 12 + inch : null; }
+      if (t.id === 'age-in') { const v = parseInt(t.value, 10); P.age = v > 10 && v < 100 ? v : null; toast(P.age ? 'Saved: age ' + P.age : 'Type an age between 11 and 99'); }
+      else { const ft = parseInt(($('#ht-ft') || {}).value, 10) || 0, inch = parseInt(($('#ht-in') || {}).value, 10) || 0; P.heightIn = ft ? ft * 12 + inch : null; if (P.heightIn) toast('Saved: ' + ft + ' ft ' + inch + ' in'); }
       E.save(); render();
     } else if (t.id === 'steps-in') {
       const v = parseInt(t.value.replace(/\D/g, ''), 10) || 0;
