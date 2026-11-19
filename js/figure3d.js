@@ -18,7 +18,7 @@
   const has = (id) => !!getDef(id);
   let T = null, loading = null, failed = false;
   const thumbs = {};
-  try { localStorage.removeItem('gfj.figthumbs.v5'); Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v6') || '{}')); } catch (e) {}
+  try { localStorage.removeItem('gfj.figthumbs.v7'); Object.assign(thumbs, JSON.parse(localStorage.getItem('gfj.figthumbs.v8') || '{}')); } catch (e) {}
 
   // The real 3D Jake (models/jake.glb, rigged), loaded only when that figure style is on. J3 = false if it failed.
   let J3 = null, j3loading = null;
@@ -26,7 +26,7 @@
     if (J3 !== null) return Promise.resolve(J3);
     if (!j3loading) {
       j3loading = Promise.all([import('./vendor/GLTFLoader.js'), import('./vendor/SkeletonUtils.js')])
-        .then(([G, SU]) => new Promise((res, rej) => new G.GLTFLoader().load('models/jake.glb?v=1', (g) => res(g), undefined, rej)).then((g) => (J3 = prepJ3(g, SU))))
+        .then(([G, SU]) => new Promise((res, rej) => new G.GLTFLoader().load('models/jake_fingers.glb?v=1', (g) => res(g), undefined, rej)).then((g) => (J3 = prepJ3(g, SU))))
         .catch(() => (J3 = false));
     }
     return j3loading;
@@ -161,6 +161,7 @@
     const c = Math.cos(R(deg)), s = Math.sin(R(deg));
     return add(add(v3(v.x * c, v.y * c, v.z * c), cross(k, v), s), k, dot(k, v) * (1 - c));
   }
+  const FLAT_DROP = 1.7; // a flat hand's wrist sits this far below the hand joint (palm on the surface)
   const PAD = { ankle0: 5.5, ankle1: 5.5, knee0: 5.5, knee1: 5.5, hand0: 3.5, hand1: 3.5, mid: 3.5, elb0: 4.5, elb1: 4.5, hip: 12, sho: 13, head: 8.5, hipj0: 9, hipj1: 9 };
   const arr = (v, d) => (v == null ? [d, d] : Array.isArray(v) ? v : [v, v]);
   function solve3(def, p) {
@@ -293,7 +294,58 @@
       }
       region[i] = RI[r] || 0;
     }
-    return { scene: root, SU, bw, q, fb, len, region, soleY, frame };
+    { // v3.6: the scan's palms and inner forearms have dark red shading painted in; mark them so the shader can lift them to skin tone
+      const nor = geo.attributes.normal, palm = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        let w = 0; for (let k = 0; k < 4; k++) { const b = sk.bones[si.getComponent(i, k)]; if (b && /Hand|ForeArm/.test(b.name)) w += sw.getComponent(i, k); }
+        if (w > 0) { const ny = nor.getY(i), t = Math.min(1, Math.max(0, (-ny - 0.05) / 0.6)); palm[i] = w * t * t * (3 - 2 * t); }
+      }
+      geo.setAttribute('palm', new T.BufferAttribute(palm, 1));
+    }
+    return { scene: root, SU, bw, q, fb, len, region, soleY, frame, fingers: prepFingers(q) };
+  }
+  // v3.6: the model's own hands with finger bones (models/jake_fingers.glb): a fist round whatever is held, flat when planted, relaxed when empty
+  const FIST = { Thumb: [0, 37, 75], roll: 100, add: 56, Index: [75, 95, 60], Middle: [75, 95, 60], Ring: [75, 95, 60], Pinky: [75, 95, 60] };
+  const FLAT = { Thumb: [0, 0, 0], roll: 0, add: 0, Index: [0, 0, 0], Middle: [0, 0, 0], Ring: [0, 0, 0], Pinky: [0, 0, 0] };
+  const RELAX = { Thumb: [0, 10, 10], roll: 25, add: 15, Index: [15, 22, 10], Middle: [18, 25, 12], Ring: [21, 28, 14], Pinky: [24, 30, 15] };
+  const HAND_POSE = { fist: FIST, flat: FLAT, open: RELAX };
+  const FINGERS = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'];
+  // Each finger joint (bind pose, metres) with the axis it curls around: tips move toward the palm (the palm faces -y in the T-pose)
+  function prepFingers(q) {
+    if (!q.RightHandIndex1 || !q.LeftHandThumb3) return null;
+    const out = {}, palm = new T.Vector3(0, -1, 0);
+    for (const S of ['Right', 'Left']) {
+      const hq = q[S + 'Hand'];
+      const fing = q[S + 'HandMiddle1'].clone().sub(hq).setY(0).normalize();
+      const thumb = new T.Vector3().crossVectors(palm, fing).multiplyScalar(S === 'Right' ? -1 : 1); // the thumb side is +z (forward) on both hands
+      const chains = {};
+      for (const f of FINGERS) chains[f] = [1, 2, 3].map((k) => {
+        const nm = S + 'Hand' + f + k, j = q[nm];
+        const d = (k < 3 ? q[S + 'Hand' + f + (k + 1)].clone().sub(j) : j.clone().sub(q[S + 'Hand' + f + (k - 1)])).normalize();
+        const c = { nm, j, a: new T.Vector3().crossVectors(d, palm).normalize() };
+        if (f === 'Thumb' && k === 1) { c.roll = new T.Vector3().crossVectors(fing, d).dot(palm) > 0 ? fing.clone() : fing.clone().negate(); c.add = new T.Vector3(0, S === 'Right' ? 1 : -1, 0); }
+        return c;
+      });
+      // the grip centre: under the index/middle knuckles, a little toward the wrist, a handle's radius into the palm, centred across the four fingers
+      const im = q[S + 'HandIndex1'].clone().add(q[S + 'HandMiddle1']).multiplyScalar(0.5);
+      const grip = im.addScaledVector(fing, -0.02).addScaledVector(palm, 0.035);
+      grip.z = ['Index', 'Middle', 'Ring', 'Pinky'].reduce((t, f) => t + q[S + 'Hand' + f + '1'].z, 0) / 4;
+      out[S] = { palm, fing, thumb, chains, grip, along: grip.clone().sub(hq).dot(fing), palmDepth: 0.032 };
+    }
+    return out;
+  }
+  // Bend the fingers of one hand. Mh maps the bind-pose hand onto the figure; each joint adds its curl, in bind space.
+  function poseFingers(bones, bw, Hf, Mh, ang) {
+    const rad = (d) => (d * Math.PI) / 180;
+    for (const f of FINGERS) {
+      let D = Mh;
+      Hf.chains[f].forEach((c, k) => {
+        let Rj = new T.Matrix4().makeRotationAxis(c.a, rad(ang[f][k]));
+        if (c.roll) Rj = new T.Matrix4().makeRotationAxis(c.add, rad(ang.add)).multiply(new T.Matrix4().makeRotationAxis(c.roll, rad(ang.roll))).multiply(Rj);
+        D = D.clone().multiply(new T.Matrix4().makeTranslation(c.j.x, c.j.y, c.j.z)).multiply(Rj).multiply(new T.Matrix4().makeTranslation(-c.j.x, -c.j.y, -c.j.z));
+        const b = bones[c.nm]; if (b) b.matrixWorld.multiplyMatrices(D, bw[c.nm]);
+      });
+    }
   }
   // Pose the model's bones from the solved joints J/F (svg-style coords). Each bone gets a world matrix that maps its
   // bind-pose slice of the body onto the figure: rotated to the limb, stretched along it to the limb's length.
@@ -315,13 +367,37 @@
     for (let i = 0; i < 2; i++) {
       const S = i ? 'Left' : 'Right'; // figure side 0 is +z, the body's right
       const sho = J['sho' + i], elb = J['elb' + i], hand = J['hand' + i];
-      const fd = nrm(sub(hand, elb)), wristApp = add(hand, fd, -gy);
+      const fd = nrm(sub(hand, elb));
+      let wristApp = s.P.flat && s.P.flat[i] ? add(hand, v3(0, FLAT_DROP, 0)) : add(hand, fd, -gy);
+      const mode = s.P.real && J3.fingers ? s.P.real[i] : null, Hf = mode ? J3.fingers[S] : null;
+      let Mreal = null;
+      if (Hf) { // his own hand, turned to the same palm/finger/thumb frame the fingered primitive hand used
+        const [hx, hy, hz] = s.hf[i];
+        const Rm = new T.Matrix4().makeBasis(hx, hy, i === 0 ? hz.clone().negate() : hz).multiply(new T.Matrix4().makeBasis(Hf.palm, Hf.fing, Hf.thumb).transpose());
+        // fist: the grip centre sits on the hand joint (where the bar or handle is); flat: palm on the surface; open: wrist where the forearm ends
+        const at = mode === 'fist' ? hand : mode === 'flat' ? add(hand, v3(0, PAD.hand0 - Hf.palmDepth * g - (s.def.mat ? 1.2 : 0), 0)) : add(hand, fd, -3.4 * HS);
+        const piv = mode === 'fist' ? Hf.grip : q[S + 'Hand'], w = V(at);
+        Mreal = new T.Matrix4().makeTranslation(w.x, w.y, w.z).multiply(Rm).multiply(new T.Matrix4().makeScale(g, g, g)).multiply(new T.Matrix4().makeTranslation(-piv.x, -piv.y, -piv.z));
+        const wq = q[S + 'Hand'].clone().applyMatrix4(Mreal); wristApp = v3(wq.x, -wq.y, wq.z); // the forearm runs to this hand's wrist
+      }
       set([S + 'Arm'], xform(V(sho), frame(V(F['ua' + i]), V(sub(elb, sho))), fb[S + 'Arm'], g, len3(sub(elb, sho)) / len[S + 'Arm'], q[S + 'Arm']));
       // forearm ends at the wrist of the fingered hand (stretched along its length only, so it keeps its thickness)
       const kF = Math.max(0.3 * g, len3(sub(wristApp, elb)) / len[S + 'ForeArm']);
-      const Ffa = frame(V(F['fa' + i]), V(fd));
+      let faFront = V(F['fa' + i]);
+      if (Mreal) { // the forearm turns halfway with the hand, so the twist is shared by wrist and elbow instead of pinching the wrist
+        const [, , hz] = s.hf[i], th = i === 0 ? hz.clone().negate() : hz.clone(), f0 = faFront.clone().normalize(), mixd = th.clone().add(f0);
+        faFront = mixd.lengthSq() > 0.09 ? mixd : th;
+      }
+      const Ffa = frame(faFront, V(Mreal ? nrm(sub(wristApp, elb)) : fd));
       set([S + 'ForeArm'], xform(V(elb), Ffa, fb[S + 'ForeArm'], g, kF, q[S + 'ForeArm']));
-      set([S + 'Hand'], xform(V(wristApp), Ffa, fb[S + 'ForeArm'], 0.02, 0.02, q[S + 'Hand'])); // the model's flat hand folds away; the fingered hand shows
+      if (Mreal) {
+        set([S + 'Hand'], Mreal);
+        poseFingers(bones, bw, Hf, Mreal, HAND_POSE[mode]);
+      } else {
+        const Mh = xform(V(wristApp), Ffa, fb[S + 'ForeArm'], 0.02, 0.02, q[S + 'Hand']);
+        set([S + 'Hand'], Mh); // the model's flat hand folds away; the fingered hand shows
+        if (J3.fingers) FINGERS.forEach((f) => J3.fingers[S].chains[f].forEach((c) => set([c.nm], Mh))); // its finger bones fold away with it
+      }
       const hj = J['hipj' + i], knee = J['knee' + i], ank = J['ankle' + i];
       set([S + 'UpLeg'], xform(V(hj), frame(V(F['th' + i]), V(sub(knee, hj))), fb[S + 'UpLeg'], g, len3(sub(knee, hj)) / len[S + 'UpLeg'], q[S + 'UpLeg']));
       const ankT = add(ank, nrm(sub(knee, ank)), footH); // the shoe's sole lands where the figure's foot is
@@ -355,6 +431,29 @@
     fb_arnolddumbbellpress: 'under', fb_renegaderow: 'neutral', fb_australianchinup: 'over', fb_trxrow: 'neutral', fb_uprightrow: 'over', fb_barbellshrug: 'over',
     farmers_walk: 'neutral', kb_farmers_walk: 'neutral',
   };
+  // Hands that rest on the floor, a bench or a box (push-ups, all fours, the bench hand on a dumbbell row): open and flat, palm down
+  function plantedHands(def) {
+    const out = [false, false];
+    if (def.pullbar || def.dips) return out;
+    const holds = (i) => !!def.hold && !((def.hold === 'db1' || def.hold === 'kb1') && i === 1);
+    const ys = [[], []];
+    for (const k of [0, 0.25, 0.5, 0.75, 1]) {
+      const { J } = solve3(def, poseAt(def, k));
+      for (const i of [0, 1]) {
+        const h = J['hand' + i]; ys[i].push(h.y);
+        if (holds(i)) continue;
+        let on = FLOOR - h.y < 6.5;
+        const b = def.bench, x = def.box;
+        if (b && b.at === 'hand' + i) on = true;
+        if (b && b.top != null && h.x >= b.x0 - 2 && h.x <= b.x1 + 2 && Math.abs(h.y + PAD.hand0 - b.top) < 3) on = true;
+        if (x && x.top != null && h.x >= x.x0 - 2 && h.x <= x.x1 + 2 && Math.abs(h.y + PAD.hand0 - x.top) < 3) on = true;
+        if (on) out[i] = true;
+      }
+    }
+    // both hands on the same surface (incline push-up): the second hand is planted too
+    for (const i of [0, 1]) if (out[1 - i] && !out[i] && !holds(i) && ys[i].every((y, n) => Math.abs(y - ys[1 - i][n]) < 2)) out[i] = true;
+    return out;
+  }
   function gripFor(id, def) {
     if (GRIP[id]) return GRIP[id];
     const h = def.hold;
@@ -445,11 +544,16 @@
     const iron = new T.MeshStandardMaterial({ color: 0x1d2227, roughness: 0.45, metalness: 0.5 });
     // the 3D model gets neutral light (the blue sky/rim light suited the grey mannequin but tinted his clothes blue)
     // v3.4: brighter, more frontal light on the model (he read dim: black shorts on a dark background, mostly side-lit)
-    scene.add(j3 ? new T.HemisphereLight(0xffffff, 0x4a443e, 1.7) : new T.HemisphereLight(0xdde7ff, 0x15181c, 1.1));
-    const key = new T.DirectionalLight(j3 ? 0xfff6ec : 0xffffff, j3 ? 2.6 : 2.6); key.position.set(80, 160, 140); scene.add(key);
-    const rim = new T.DirectionalLight(j3 ? 0xffffff : 0x8fb0ff, j3 ? 1.0 : 1.8); rim.position.set(-120, 60, -100); scene.add(rim);
-    const fill = new T.DirectionalLight(0xffe2c8, j3 ? 1.0 : 0.6); fill.position.set(60, -40, 120); scene.add(fill);
-    if (j3) { const f2 = new T.DirectionalLight(0xffffff, 0.8); f2.position.set(-60, 40, 160); scene.add(f2); const f3 = new T.DirectionalLight(0xffffff, 0.6); f3.position.set(160, 20, -40); scene.add(f3); }
+    if (j3) { // v3.5: one very soft, neutral top light; mostly even sky light so highlights and shadows sit close together
+      scene.add(new T.HemisphereLight(0xffffff, 0xb0b0b0, 2.5));
+      const top = new T.DirectionalLight(0xffffff, 0.8); top.position.set(20, 300, 50); scene.add(top);
+      const front = new T.DirectionalLight(0xffffff, 0.35); front.position.set(80, 60, 200); scene.add(front);
+    } else {
+      scene.add(new T.HemisphereLight(0xdde7ff, 0x15181c, 1.1));
+      const key = new T.DirectionalLight(0xffffff, 2.6); key.position.set(80, 160, 140); scene.add(key);
+      const rim = new T.DirectionalLight(0x8fb0ff, 1.8); rim.position.set(-120, 60, -100); scene.add(rim);
+      const fill = new T.DirectionalLight(0xffe2c8, 0.6); fill.position.set(60, -40, 120); scene.add(fill);
+    }
 
     const torsoW = (t, front) => [0.66 * (front && t > 0.55 && t < 0.98 ? 1.14 : 1), 0.95 + 0.62 * sstep(0.22, 0.86, t)];
     // colours: grey everywhere (classic), or Jake's skin/clothes
@@ -478,11 +582,13 @@
     };
     { // hands with fingers, closed around whatever is held
       const grip = gripFor(id, def);
-      const hm = j3 ? new T.MeshStandardMaterial({ color: 0xc4845e, roughness: 0.8 }) : jake ? new T.MeshToonMaterial({ color: JAKE.skin, gradientMap: rampTex() }) : new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
-      const closed = grip !== 'open';
-      const hands = [makeHand(hm, closed), makeHand(hm, closed)];
+      const hm = j3 ? new T.MeshStandardMaterial({ color: 0xc69a80, roughness: 0.9 }) : jake ? new T.MeshToonMaterial({ color: JAKE.skin, gradientMap: rampTex() }) : new T.MeshStandardMaterial({ color: BASE, roughness: 0.36, metalness: 0.08 });
+      const closed = grip !== 'open', flat = plantedHands(def);
+      const hands = [makeHand(hm, closed && !flat[0]), makeHand(hm, closed && !flat[1])];
+      P.flat = flat;
       const HS = 1.65; // real-hand size against the forearm
-      hands[0].scale.set(HS, HS, HS); hands[1].scale.set(HS, HS, -HS); // mirror for the other hand
+      // makeHand builds a LEFT hand (palm +X, fingers +Y, thumb +Z = X×Y). Side 0 is the body's right, so that one is mirrored.
+      hands[0].scale.set(HS, HS, -HS); hands[1].scale.set(HS, HS, HS); // v3.5: was mirrored on the wrong side, so every thumb pointed backwards
       hands.forEach((hg) => { rig.add(hg); if (jake && !j3) { const ms = []; hg.traverse((o) => { if (o.isMesh) ms.push(o); }); ms.forEach((o) => o.add(new T.Mesh(o.geometry, ink()))); } });
       P.hand = hands; P.grip = grip;
     }
@@ -491,17 +597,21 @@
       const root = J3.SU.clone(J3.scene); scene.add(root); root.updateMatrixWorld(true);
       let sm = null; root.traverse((o) => { if (o.isSkinnedMesh && !sm) sm = o; });
       sm.frustumCulled = false;
-      const mm = new T.MeshStandardMaterial({ map: sm.material.map, roughness: 0.85, metalness: 0 });
-      mm.onBeforeCompile = (sh) => { // worked muscles: the texture is tinted red/orange, with a little glow on top
-        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 glowc;\nvarying vec3 vGlow;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glowc;');
-        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vGlow;')
-          .replace('#include <map_fragment>', '#include <map_fragment>\n  { float lum = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15)); diffuseColor.rgb = mix(diffuseColor.rgb, vGlow * (0.3 + 1.1 * lum), 0.72 * vGlow.r); }')
-          .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += vGlow * 0.12;');
+      const mm = new T.MeshStandardMaterial({ map: sm.material.map, roughness: 0.95, metalness: 0 });
+      mm.onBeforeCompile = (sh) => { // the texture has strong, reddish shading painted into the skin: flatten it (lift darks, soften reds)
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float palm;\nvarying float vPalm;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvPalm = palm;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vPalm;').replace('#include <map_fragment>', '#include <map_fragment>\n  { vec3 c = pow(max(diffuseColor.rgb, vec3(0.0)), vec3(0.78)); float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); float red = smoothstep(0.02, 0.18, c.r - c.b) * smoothstep(0.0, 0.1, c.r - c.g); c = mix(c, vec3(l) * vec3(1.18, 0.98, 0.84), 0.4 * red);'
+          + ' vec3 skin = vec3(0.80, 0.60, 0.49) * (0.82 + 0.45 * smoothstep(0.08, 0.5, l)); c = mix(c, skin, 0.85 * vPalm * smoothstep(0.55, 0.3, l)); diffuseColor.rgb = c; }'); // v3.6: palms / inner forearms up to skin tone
       };
       sm.material = mm;
       const bones = {}; sm.skeleton.bones.forEach((b) => { b.matrixWorldAutoUpdate = false; bones[b.name] = b; });
       j3s = { root, sm, bones };
       Object.keys(P).forEach((k) => { if (k !== 'hand' && k !== 'grip') [].concat(P[k]).forEach((o) => { o.visible = false; }); });
+      if (J3.fingers) { // v3.6: his own hands instead of the primitive ones
+        const one = def.hold === 'db1' || def.hold === 'kb1'; // the free hand of a one-arm lift is empty
+        P.real = [0, 1].map((i) => (P.flat[i] ? 'flat' : P.grip === 'open' || (one && i === 1) ? 'open' : 'fist'));
+        P.hand.forEach((o) => { o.visible = false; });
+      }
     }
     if (jake && !j3) { // face: eyes, brows, nose, the mustache
       const fm = new T.MeshToonMaterial({ color: JAKE.hair, gradientMap: rampTex() });
@@ -534,8 +644,14 @@
       const src = spec.pose === 'b' ? B : A, j = src.J[spec.at];
       return { x: j.x + (spec.dx || 0), top: spec.top != null ? spec.top : j.y + (PAD[spec.at] || 0) };
     };
-    const flatBench = (x0, x1, top) => { box(x1 - x0, 7, 26, (x0 + x1) / 2, top + 3.5, 0, pad); const legH = FLOOR - top - 7; for (const x of [x0 + 10, x1 - 10]) box(5, legH, 20, x, top + 7 + legH / 2, 0, iron); };
-    if (def.bench) { const b = def.bench.at ? (() => { const a = auto(def.bench); const w = def.bench.w || 90; const x0 = a.x - (def.bench.side === 'right' ? 10 : w - 10); return { x0, x1: x0 + w, top: a.top }; })() : def.bench; flatBench(b.x0, b.x1, b.top); }
+    const flatBench = (x0, x1, top, zc = 0, depth = 26) => { box(x1 - x0, 7, depth, (x0 + x1) / 2, top + 3.5, zc, pad); const legH = FLOOR - top - 7; for (const x of [x0 + 10, x1 - 10]) box(5, legH, Math.min(20, depth - 6), x, top + 7 + legH / 2, zc, iron); };
+    if (def.bench) {
+      const b = def.bench.at ? (() => { const a = auto(def.bench); const w = def.bench.w || 90; const x0 = a.x - (def.bench.side === 'right' ? 10 : w - 10); return { x0, x1: x0 + w, top: a.top }; })() : def.bench;
+      // v3.5: a hand resting on the bench is really on its pad (the pad used to sit at the centre line, so a side hand hung off it)
+      let zc = 0, depth = 26; const at = def.bench.at;
+      if (at && /^hand[01]$/.test(at)) { const h = A.J[at], o = A.J[at === 'hand0' ? 'hand1' : 'hand0']; if (Math.abs(o.y - h.y) < 2) depth = Math.max(26, 2 * Math.max(Math.abs(h.z), Math.abs(o.z)) + 14); else { zc = h.z; depth = 28; } }
+      flatBench(b.x0, b.x1, b.top, zc, depth);
+    }
     if (def.incline) { // seat plus a tilted back pad
       const c = def.incline, seatTop = c.seat || 152;
       flatBench(c.x - 10, c.x + 34, seatTop);
@@ -554,7 +670,7 @@
     }
     if (def.box) { const b = def.box.at ? (() => { const a = auto(def.box); return { x0: a.x - 22, x1: a.x + 22, top: a.top }; })() : def.box; box(b.x1 - b.x0, FLOOR - b.top, 30, (b.x0 + b.x1) / 2, (b.top + FLOOR) / 2, 0, pad); }
     if (def.pullbar) { // overhead bar with two posts
-      const y = def.pullbar.y, x = def.pullbar.x != null ? def.pullbar.x : A.J.mid.x;
+      const y = A.J.mid.y, x = A.J.mid.x; // v3.5: the bar runs through the fists (it sat 2 units above them, so the hands only touched it)
       const bar = cyl(1.8, 96, steel); bar.rotation.x = Math.PI / 2; bar.position.set(x, -y, 0); scene.add(bar);
       for (const z of [-46, 46]) box(5, FLOOR - y + 6, 5, x, (y + FLOOR) / 2 - 3, z, iron);
     }
@@ -675,6 +791,13 @@
         // the fist (grip centre) sits on the hand joint, where the bar or handle is
         const HS = 1.65, gx = P.grip === 'open' ? 0.2 : 1.5, gy = P.grip === 'open' ? 3.4 : 4.9;
         hgp.position.copy(W3(add(add(hand, fd, -gy * HS), palm, -gx * HS)));
+        if (P.flat && P.flat[i]) { // planted: palm flat on the surface, fingers pointing the way the head points, wrist where the forearm ends
+          let fw = v3(tdir.x, 0, tdir.z); if (len3(fw) < 0.2) fw = v3(F.torso.x, 0, F.torso.z); fw = nrm(fw);
+          const Yf = new T.Vector3(fw.x, 0, fw.z).normalize(), Xf = new T.Vector3(0, -1, 0), Zf = new T.Vector3().crossVectors(Xf, Yf).normalize();
+          hgp.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(Xf, Yf, Zf));
+          hgp.position.copy(W3(add(hand, v3(0, FLAT_DROP, 0))));
+          (s.hf || (s.hf = []))[i] = [Xf, Yf, Zf];
+        } else (s.hf || (s.hf = []))[i] = [Xw, Yw, Zw];
         (s.gz || (s.gz = []))[i] = Zw.clone(); // grip axis: whatever the hand holds runs across the palm
         if (props.hand2 && props.hand2[i]) { props.hand2[i].quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), Zw); props.hand2[i].position.copy(W3(hand)); }
       }
@@ -794,8 +917,8 @@
     const r = new T.WebGLRenderer({ antialias: true, alpha: true });
     r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     r.outputColorSpace = T.SRGBColorSpace;
-    r.toneMapping = T.ACESFilmicToneMapping;
-    r.toneMappingExposure = 0.95;
+    r.toneMapping = T.NeutralToneMapping; // v3.5: ACES pushed contrast and saturation (redder shadows)
+    r.toneMappingExposure = 1.0;
     r.domElement.className = 'fig3d';
     hero = { r, cam: new T.PerspectiveCamera(28, 1, 1, 3000), el: null, id: null };
     return hero;
@@ -847,7 +970,7 @@
     if (!thumbR) {
       thumbR = new T.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
       thumbR.setClearColor(0x1f252c, 1);
-      thumbR.outputColorSpace = T.SRGBColorSpace; thumbR.toneMapping = T.ACESFilmicToneMapping; thumbR.toneMappingExposure = 0.95;
+      thumbR.outputColorSpace = T.SRGBColorSpace; thumbR.toneMapping = T.NeutralToneMapping; thumbR.toneMappingExposure = 1.0;
       thumbCam = new T.PerspectiveCamera(28, 1, 1, 3000);
     }
     thumbR.setPixelRatio(1); thumbR.setSize(size, size, false);
@@ -865,7 +988,7 @@
     load().then(() => {
       let n = 0;
       for (const id of [...want]) { thumbs[figStyle() + '|' + id] = snap(id, 1, 128); want.delete(id); if (!hero || hero.id !== id) dispose(id); if (++n >= 6) break; }
-      try { localStorage.setItem('gfj.figthumbs.v6', JSON.stringify(thumbs)); } catch (e) {}
+      try { localStorage.setItem('gfj.figthumbs.v8', JSON.stringify(thumbs)); } catch (e) {}
       window.dispatchEvent(new Event('figthumbs'));
       if (want.size) thumbJob = setTimeout(runThumbs, 60);
     }).catch(() => {});

@@ -819,7 +819,48 @@
     const recAll = E.recovery();
     const rec = E.GROUPS.map((g) => recAll.find((r) => r.group === g) || { group: g, pct: 100 }).sort((x, y) => x.pct - y.pct);
     const bw = E.bodyweight();
-    app.innerHTML = `<div class="top"><div class="title-i"><h1>Body</h1><button class="info-btn inline" data-act="bodyinfo" aria-label="What’s on this page">i</button></div></div>
+    if (ui.bodyView === 'setup') { // v3.6: settings you set once live on their own page, off the Body page
+      app.innerHTML = `<div class="top"><div><button class="back-link" data-act="bodyview" data-k="">‹ Body</button><h1>Setup</h1></div></div>
+      <h2>Your plan</h2>
+      ${(() => { const cur = { goal: P.goal, split: P.split, minutes: S.settings.minutes, stepGoal: P.stepGoal }; const D = Object.assign({}, cur, ui.planDraft || {}); const dirty = Object.keys(D).some((k) => D[k] !== cur[k]); const ch = (k, v) => (D[k] === v ? 'on' : '') + (D[k] === v && cur[k] !== v ? ' pending' : ''); return `<div class="card plan-box ${dirty ? 'dirty' : ''}">
+        <div class="lbl">Goal</div>
+        <div class="chips">${Object.keys(GOALS).map((k) => `<button class="chip ${ch('goal', k)}" data-act="plandraft" data-k="goal" data-v="${k}">${GOALS[k].name}</button>`).join('')}</div>
+        <div class="lbl">Weekly plan</div>
+        <div class="chips">${Object.keys(SPLITS).map((k) => `<button class="chip ${ch('split', k)}" data-act="plandraft" data-k="split" data-v="${k}">${SPLITS[k].name}</button>`).join('')}</div>
+        <div class="lbl">Workout length</div>
+        <div class="chips">${[30, 40, 45, 60, 75, 90].map((m) => `<button class="chip ${ch('minutes', m)}" data-act="plandraft" data-k="minutes" data-v="${m}">${m} min</button>`).join('')}</div>
+        <div class="lbl">Daily step goal</div>
+        <div class="chips">${[0, 6000, 8000, 10000, 12000].map((n) => `<button class="chip ${ch('stepGoal', n)}" data-act="plandraft" data-k="stepGoal" data-v="${n}">${n ? n.toLocaleString() : 'Off'}</button>`).join('')}</div>
+        ${dirty ? `<div class="plan-save"><button class="btn-main" data-act="plansave">Save changes</button><button class="btn-link" data-act="planundo">Undo</button></div>` : ''}`; })()}
+        <button class="pull-tab" data-act="methodinfo"><span class="pt-grab"></span><span class="pt-row"><span>How weights and reps are picked</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14l5-5 5 5"/></svg></span></button>
+      </div>
+
+      <h2>Equipment</h2>
+      <div class="card">${EQUIPMENT.map((e) => `<div class="toggle"><span>${esc(e.name)}</span><button class="sw ${S.settings.equipment[e.id] ? 'on' : ''}" data-act="eq" data-k="${e.id}" role="switch" aria-checked="${!!S.settings.equipment[e.id]}" aria-label="${esc(e.name)}"></button></div>`).join('')}</div>
+      ${S.settings.equipment.dumbbell ? (() => { const pairs = S.settings.dbMode === 'pairs' || (S.settings.dumbbells && S.settings.dumbbells.length); const max = S.settings.rackMax || 100; return `<div class="lbl" style="margin:16px 4px 8px">Dumbbells</div>
+      <div class="seg seg2"><button class="${pairs ? '' : 'on'}" data-act="dbmode" data-k="rack">Gym rack</button><button class="${pairs ? 'on' : ''}" data-act="dbmode" data-k="pairs">Only certain pairs</button></div>
+      ${pairs ? `<div class="card"><div class="sub" style="margin-bottom:10px">Tap each pair you own (lb). Weights only go up through these.</div>${dbGrid(S.settings.dumbbells || [], 'dbown')}</div>`
+        : `<div class="card"><div class="rack-line"><b>2.5 – 25 lb</b><span>in 2.5 lb steps</span></div><div class="rack-line"><b>30 – ${max} lb</b><span>in 5 lb steps</span></div>
+          <div class="lbl" style="margin-top:12px">Heaviest pair</div><div class="chips">${[50, 75, 100, 120, 150].map((m) => `<button class="chip ${max === m ? 'on' : ''}" data-act="rackmax" data-k="${m}">${m} lb</button>`).join('')}</div></div>`}`; })() : ''}
+
+      <h2>Exercise figure</h2>
+      ${(() => { const st = window.Figure3D && Figure3D.style ? Figure3D.style() : 'classic'; return `<div class="seg seg2"><button class="${st === 'classic' ? 'on' : ''}" data-act="figstyle" data-k="classic">Classic</button><button class="${st === 'jake3d' ? 'on' : ''}" data-act="figstyle" data-k="jake3d">Jake</button></div>
+      <div class="sub" style="margin:-6px 4px 0">${st === 'jake3d' ? 'The real 3D you, built from your character sheet.' : 'Plain grey figure with the worked muscles lit up.'}</div>`; })()}
+
+      <h2>Your data</h2>
+      <div class="sub">Everything is saved on this phone only. Back it up now and then.</div>
+      <button class="btn-quiet" data-act="importfb">Import workout history</button>
+      <div class="sub" style="margin:6px 4px 0;font-size:13px">From Fitbod, Strong, Hevy, JEFIT, FitNotes or any CSV with date, exercise, weight and reps.</div>
+      <button class="btn-quiet" data-act="exportcsv">Export all workouts (CSV)</button>
+      <button class="btn-quiet" data-act="export">Save a backup</button>
+      <button class="btn-quiet" data-act="importbk">Restore a backup</button>
+      <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
+      <input type="file" id="filebk" accept=".json,application/json" hidden>
+      <input type="file" id="filefb" accept=".csv,text/csv,text/plain" hidden>
+      <div class="sub ver-tap" data-act="ver" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v3.6</div>`;
+      return;
+    }
+    app.innerHTML = `<div class="top"><div class="title-i"><h1>Body</h1><button class="info-btn inline" data-act="bodyinfo" aria-label="What’s on this page">i</button></div><button class="setup-btn" data-act="bodyview" data-k="setup" aria-label="Setup: plan, equipment, figure and data"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>Setup</button></div>
 
       <h2>Injuries &amp; avoiding</h2>
       <div class="card">
@@ -837,6 +878,12 @@
       <h2>Pain log</h2>
       <div class="card">${S.painLog.length ? S.painLog.slice().reverse().slice(0, 12).map((p) => `<div class="pain"><b>${fmtDate(p.at, { month: 'short', day: 'numeric' })}: ${esc((JOINTS.find((j) => j.id === p.joint) || { name: 'Other' }).name)}, ${esc(p.severity)}</b>${p.ex ? ` <span>on ${esc(E.exInfo(p.ex).name.toLowerCase())}</span>` : ''}${p.note ? `<br><span>${esc(p.note)}</span>` : ''}</div>`).join('') : '<div class="empty">No pain logged.</div>'}</div>
 
+      <h2>Talk it through</h2>
+      <div class="card"><div class="sub" style="color:#c9d0d7">Copy a summary of your injuries, pain log and last workouts, then paste it to Claude. Claude can work out what’s causing it and update the app.</div>
+        <button class="btn-main" data-act="copysum" style="margin-top:12px;height:52px;font-size:21px">Copy summary for Claude</button>
+        <div class="sub" style="color:#c9d0d7;margin-top:14px">Or copy your workouts (sets, weights, minutes, estimated calories) to track alongside food in Claude.</div>
+        <div class="two-btn"><button class="btn-quiet" data-act="copyclaude" data-k="7">Last 7 days</button><button class="btn-quiet" data-act="copyclaude" data-k="30">Last 30 days</button></div></div>
+
       <h2>About you</h2>
       <div class="card">
         <div class="about-note ${P.sex && P.age && bw ? 'ok' : ''}">${P.sex && P.age && bw ? `✓ Your lifts are rated against strength standards for ${P.sex === 'f' ? 'women' : 'men'} around ${P.age} at ${fmtW(bw)} lb. See How you compare on Progress.` : `Add ${[!P.sex && 'sex', !P.age && 'age', !bw && 'body weight'].filter(Boolean).join(', ')} to rate your lifts against strength standards (Progress → How you compare).`}</div>
@@ -848,49 +895,7 @@
         <div class="sub" style="margin-top:8px">${bw ? `Last: ${fmtW(bw)} lb on ${fmtDate(S.weights[S.weights.length - 1].date, { month: 'short', day: 'numeric' })}. Chart is on the Progress tab.` : 'Log it now and then. The chart shows on Progress.'}</div>
       </div>
 
-      <h2>Your plan</h2>
-      ${(() => { const cur = { goal: P.goal, split: P.split, minutes: S.settings.minutes, stepGoal: P.stepGoal }; const D = Object.assign({}, cur, ui.planDraft || {}); const dirty = Object.keys(D).some((k) => D[k] !== cur[k]); const ch = (k, v) => (D[k] === v ? 'on' : '') + (D[k] === v && cur[k] !== v ? ' pending' : ''); return `<div class="card plan-box ${dirty ? 'dirty' : ''}">
-        <div class="lbl">Goal</div>
-        <div class="chips">${Object.keys(GOALS).map((k) => `<button class="chip ${ch('goal', k)}" data-act="plandraft" data-k="goal" data-v="${k}">${GOALS[k].name}</button>`).join('')}</div>
-        <div class="lbl">Weekly plan</div>
-        <div class="chips">${Object.keys(SPLITS).map((k) => `<button class="chip ${ch('split', k)}" data-act="plandraft" data-k="split" data-v="${k}">${SPLITS[k].name}</button>`).join('')}</div>
-        <div class="lbl">Workout length</div>
-        <div class="chips">${[30, 40, 45, 60, 75, 90].map((m) => `<button class="chip ${ch('minutes', m)}" data-act="plandraft" data-k="minutes" data-v="${m}">${m} min</button>`).join('')}</div>
-        <div class="lbl">Daily step goal</div>
-        <div class="chips">${[0, 6000, 8000, 10000, 12000].map((n) => `<button class="chip ${ch('stepGoal', n)}" data-act="plandraft" data-k="stepGoal" data-v="${n}">${n ? n.toLocaleString() : 'Off'}</button>`).join('')}</div>
-        ${dirty ? `<div class="plan-save"><button class="btn-main" data-act="plansave">Save changes</button><button class="btn-link" data-act="planundo">Undo</button></div>` : ''}`; })()}
-        <button class="pull-tab" data-act="methodinfo"><span class="pt-grab"></span><span class="pt-row"><span>How weights and reps are picked</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14l5-5 5 5"/></svg></span></button>
-      </div>
-
-      <h2>Exercise figure</h2>
-      ${(() => { const st = window.Figure3D && Figure3D.style ? Figure3D.style() : 'classic'; return `<div class="seg seg2"><button class="${st === 'classic' ? 'on' : ''}" data-act="figstyle" data-k="classic">Classic</button><button class="${st === 'jake3d' ? 'on' : ''}" data-act="figstyle" data-k="jake3d">Jake</button></div>
-      <div class="sub" style="margin:-6px 4px 0">${st === 'jake3d' ? 'The real 3D you, built from your character sheet.' : 'Plain grey figure with the worked muscles lit up.'}</div>`; })()}
-
-      <h2>Your equipment</h2>
-      <div class="card">${EQUIPMENT.map((e) => `<div class="toggle"><span>${esc(e.name)}</span><button class="sw ${S.settings.equipment[e.id] ? 'on' : ''}" data-act="eq" data-k="${e.id}" role="switch" aria-checked="${!!S.settings.equipment[e.id]}" aria-label="${esc(e.name)}"></button></div>`).join('')}</div>
-      ${S.settings.equipment.dumbbell ? (() => { const pairs = S.settings.dbMode === 'pairs' || (S.settings.dumbbells && S.settings.dumbbells.length); const max = S.settings.rackMax || 100; return `<h2>Dumbbells</h2>
-      <div class="seg seg2"><button class="${pairs ? '' : 'on'}" data-act="dbmode" data-k="rack">Gym rack</button><button class="${pairs ? 'on' : ''}" data-act="dbmode" data-k="pairs">Only certain pairs</button></div>
-      ${pairs ? `<div class="card"><div class="sub" style="margin-bottom:10px">Tap each pair you own (lb). Weights only go up through these.</div>${dbGrid(S.settings.dumbbells || [], 'dbown')}</div>`
-        : `<div class="card"><div class="rack-line"><b>2.5 – 25 lb</b><span>in 2.5 lb steps</span></div><div class="rack-line"><b>30 – ${max} lb</b><span>in 5 lb steps</span></div>
-          <div class="lbl" style="margin-top:12px">Heaviest pair</div><div class="chips">${[50, 75, 100, 120, 150].map((m) => `<button class="chip ${max === m ? 'on' : ''}" data-act="rackmax" data-k="${m}">${m} lb</button>`).join('')}</div></div>`}`; })() : ''}
-
-      <h2>Talk it through</h2>
-      <div class="card"><div class="sub" style="color:#c9d0d7">Copy a summary of your injuries, pain log and last workouts, then paste it to Claude. Claude can work out what’s causing it and update the app.</div>
-        <button class="btn-main" data-act="copysum" style="margin-top:12px;height:52px;font-size:21px">Copy summary for Claude</button>
-        <div class="sub" style="color:#c9d0d7;margin-top:14px">Or copy your workouts (sets, weights, minutes, estimated calories) to track alongside food in Claude.</div>
-        <div class="two-btn"><button class="btn-quiet" data-act="copyclaude" data-k="7">Last 7 days</button><button class="btn-quiet" data-act="copyclaude" data-k="30">Last 30 days</button></div></div>
-
-      <h2>Your data</h2>
-      <div class="sub">Everything is saved on this phone only. Back it up now and then.</div>
-      <button class="btn-quiet" data-act="importfb">Import workout history</button>
-      <div class="sub" style="margin:6px 4px 0;font-size:13px">From Fitbod, Strong, Hevy, JEFIT, FitNotes or any CSV with date, exercise, weight and reps.</div>
-      <button class="btn-quiet" data-act="exportcsv">Export all workouts (CSV)</button>
-      <button class="btn-quiet" data-act="export">Save a backup</button>
-      <button class="btn-quiet" data-act="importbk">Restore a backup</button>
-      <button class="btn-quiet btn-danger" data-act="reset">Erase everything and start over</button>
-      <input type="file" id="filebk" accept=".json,application/json" hidden>
-      <input type="file" id="filefb" accept=".csv,text/csv,text/plain" hidden>
-      <div class="sub ver-tap" data-act="ver" style="margin:22px 4px 0;color:var(--dim)">Get F*ing Jacked! v3.0</div>`;
+`;
   }
 
 
@@ -968,7 +973,8 @@
         ui.planDraft = null; E.save(); afterPlanChange(); render(); toast('Saved ✓ Your next workout uses the new plan');
         break;
       }
-      case 'tab': if (ui.tab !== el.dataset.k) { if (ui.planDraft) { ui.planDraft = null; toast('Plan changes not saved'); } ui.tab = el.dataset.k; ui.detail = null; app.classList.remove('tabin'); void app.offsetWidth; app.classList.add('tabin'); render(); window.scrollTo(0, 0); } break;
+      case 'bodyview': ui.bodyView = el.dataset.k || null; render(); window.scrollTo(0, 0); break;
+      case 'tab': if (ui.tab !== el.dataset.k) { ui.bodyView = null; if (ui.planDraft) { ui.planDraft = null; toast('Plan changes not saved'); } ui.tab = el.dataset.k; ui.detail = null; app.classList.remove('tabin'); void app.offsetWidth; app.classList.add('tabin'); render(); window.scrollTo(0, 0); } break;
       case 'close': closeSheet(); break;
       case 'pickday': ui.planDay = el.dataset.k; ui.plan = null; render(); break;
       case 'start': E.startWorkout(ensurePlan()); ui.plan = null; ui.planDay = null; keepAwake(); render(); window.scrollTo(0, 0); break;
@@ -1073,8 +1079,8 @@
       case 'range': ui.range = el.dataset.k; render(); break;
       case 'openlib': openLibrary(); break;
       case 'libg': ui.detail.g = el.dataset.k; renderDetail(); break;
-      case 'libopen': ui.detail = { lib: el.dataset.ex, fromLib: { q: ui.detail.q, g: ui.detail.g }, view: 'main', tab: 0, q: '' }; renderDetail(); $('#detail .detail').scrollTop = 0; break;
-      case 'libback': { const f = ui.detail.fromLib || { q: '', g: 'All' }; ui.detail = { library: true, view: 'library', q: f.q, g: f.g }; renderDetail(); break; }
+      case 'libopen': ui.detail = { lib: el.dataset.ex, fromLib: { q: ui.detail.q, g: ui.detail.g, y: ($('#detail .detail') || {}).scrollTop || 0 }, view: 'main', tab: 0, q: '' }; renderDetail(); $('#detail .detail').scrollTop = 0; break;
+      case 'libback': { const f = ui.detail.fromLib || { q: '', g: 'All' }; ui.detail = { library: true, view: 'library', q: f.q, g: f.g }; renderDetail(); const dl = $('#detail .detail'); if (dl && f.y) { dl.style.animation = 'none'; dl.scrollTop = f.y; } break; } // back to the list where you left it
       case 'idxinfo': infoSheet('index'); break;
       case 'methodinfo': infoSheet('method'); break;
       case 'stdinfo': infoSheet('standards'); break;
@@ -1128,7 +1134,7 @@
         else { const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = name; a2.click(); }
         break;
       }
-      case 'bodyinfo': sheet(`<h3>Body</h3><ol class="steps-list"><li><b>Injuries &amp; avoiding:</b> joints you’re protecting and exercises you’ve dropped. The plan works around both.</li><li><b>Muscle recovery:</b> how rested each muscle is, from what you’ve trained lately.</li><li><b>Pain log:</b> everything you’ve reported, for spotting patterns.</li><li><b>About you</b> and <b>Your plan:</b> your details, goal and schedule.</li><li><b>Your data:</b> import from other apps, export, and backups. Everything stays on this phone.</li></ol>`); break;
+      case 'bodyinfo': sheet(`<h3>Body</h3><ol class="steps-list"><li><b>Injuries &amp; avoiding:</b> joints you’re protecting and exercises you’ve dropped. The plan works around both.</li><li><b>Muscle recovery:</b> how rested each muscle is, from what you’ve trained lately.</li><li><b>Pain log:</b> everything you’ve reported, for spotting patterns.</li><li><b>Talk it through:</b> copy a summary to paste to Claude.</li><li><b>About you:</b> age, height and body weight.</li><li><b>Setup</b> (top right): your plan, equipment, exercise figure, and your data (import, export, backups). Everything stays on this phone.</li></ol>`); break;
       case 'injadd': sheet(`<h3>Add an injury</h3><p>Pick the joint and how bad. The plan will work around it.</p>${JOINTS.filter((j) => (E.S.joints[j.id] || 'ok') === 'ok').map((j) => `<div class="inj-pick"><span>${j.name}</span><button class="opt" data-act="injset" data-j="${j.id}" data-k="sore">Sore</button><button class="opt" data-act="injset" data-j="${j.id}" data-k="injured">Injured</button></div>`).join('') || '<div class="empty">Every joint is already flagged.</div>'}`); break;
       case 'injset': E.S.joints[el.dataset.j] = el.dataset.k; E.save(); closeSheet(); afterPlanChange(); render(); toast((JOINTS.find((j) => j.id === el.dataset.j) || {}).name + ': ' + el.dataset.k + '. Plan updated'); break;
     }
