@@ -633,7 +633,16 @@
       const b0 = new T.Mesh(new T.SphereGeometry(2.9, 16, 12), skin), b1 = new T.Mesh(new T.SphereGeometry(2.9, 16, 12), skin);
       rig.add(shaft); rig.add(tipM); rig.add(b0); rig.add(b1);
       if (jake && !j3) [shaft, tipM, b0, b1].forEach((m) => m.add(new T.Mesh(m.geometry, ink())));
-      honest = { shaft, tipM, b0, b1, pts: null, prev: null };
+      honest = { shaft, tipM, b0, b1, pts: null, prev: null, all: [shaft, tipM, b0, b1] };
+      if (id === 'hammer_curl') { // v3.7 joke: a full stream, and a puddle that keeps growing into a pond
+        const pee = new T.MeshStandardMaterial({ color: 0xf0cf2e, roughness: 0.15, metalness: 0.05, transparent: true, opacity: 0.82 });
+        const stream = new T.Mesh(new T.BufferGeometry(), pee);
+        const pond = new T.Mesh(new T.CircleGeometry(1, 48), new T.MeshStandardMaterial({ color: 0xe3c22a, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.7, depthWrite: false }));
+        pond.rotation.x = -Math.PI / 2; pond.visible = false;
+        scene.add(stream); scene.add(pond);
+        Object.assign(honest, { stream, pond, t0: performance.now(), pc: null });
+        honest.all.push(stream, pond);
+      }
     }
     // ---- equipment ----
     const props = { hold: [], extents: [] };
@@ -861,6 +870,26 @@
       const side = nrm(cross(d0, F.torso));
       const hang = add(add(A2, v3(0, 1, 0), 3.2), F.torso, -0.5);
       H.b0.position.copy(W3(add(hang, side, 2.4))); H.b1.position.copy(W3(add(hang, side, -2.4)));
+      if (H.stream) {
+        // ballistic arc from the tip (svg coords, y down): ~10 ft/s out, real gravity, lands on the floor
+        const tip = P2[N - 1], sec = (performance.now() - H.t0) / 1000;
+        const out = nrm(add(add(nrm(sub(tip, P2[N - 2])), F.torso, 1.6), v3(0, -0.35, 0)));
+        const spd = 250 + 18 * Math.sin(sec * 7) + 10 * Math.sin(sec * 17), GR = 1000;
+        const arc = [];
+        for (let t = 0; t < 1.2; t += 0.02) {
+          const q = v3(tip.x + out.x * spd * t, tip.y + out.y * spd * t + 0.5 * GR * t * t, tip.z + out.z * spd * t);
+          if (q.y >= FLOOR) { const pr = arc[arc.length - 1] || tip, f = (FLOOR - pr.y) / ((q.y - pr.y) || 1); arc.push(v3(pr.x + (q.x - pr.x) * f, FLOOR, pr.z + (q.z - pr.z) * f)); break; }
+          arc.push(q);
+        }
+        if (arc.length < 2) arc.push(v3(tip.x, FLOOR, tip.z));
+        const sg2 = new T.TubeGeometry(new T.CatmullRomCurve3([tip, ...arc].map(W3)), 40, 1.15, 10, false);
+        H.stream.geometry.dispose(); H.stream.geometry = sg2;
+        const land = arc[arc.length - 1];
+        if (!H.pc) H.pc = land;
+        const r = Math.min(190, 2.5 + 9 * Math.sqrt(sec)); // ~70 after a minute, a pond after a few
+        H.pond.visible = true; H.pond.scale.set(r * 1.25, r, 1);
+        H.pond.position.set(H.pc.x + r * 0.15, -FLOOR + 0.35, H.pc.z);
+      }
     }
     if (s.j3) poseJ3(s, J, F, heel);
     if (props.mid) props.mid.position.copy(W3(add(J.mid, nrm(sub(J.hand0, J.elb0)), def.hold === 'wheel' ? 4 : 0)));
@@ -976,9 +1005,9 @@
     thumbR.setPixelRatio(1); thumbR.setSize(size, size, false);
     const s = build(id);
     frameCam(thumbCam, size > 200 ? s.view : s.mini, 1, s.def.cam);
-    if (s.honest) [s.honest.shaft, s.honest.tipM, s.honest.b0, s.honest.b1].forEach((m) => (m.visible = false));
+    if (s.honest) s.honest.all.forEach((m) => (m.visible = false));
     pose(s, k == null ? 1 : k);
-    if (s.honest) [s.honest.shaft, s.honest.tipM, s.honest.b0, s.honest.b1].forEach((m) => (m.visible = true));
+    if (s.honest) s.honest.all.forEach((m) => (m.visible = m !== s.honest.pond));
     thumbR.render(s.scene, thumbCam);
     return thumbR.domElement.toDataURL('image/jpeg', 0.82);
   }
