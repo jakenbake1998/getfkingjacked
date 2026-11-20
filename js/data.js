@@ -339,3 +339,13 @@ window.GOALS = {
   strength: { name: 'Get stronger', reps: null, restScale: 1 },
   tone: { name: 'Tone and lose weight', reps: { big: 12, mid: 12, iso: 15, core: 20 }, restScale: 0.4, repCap: 20 },
 };
+
+// v3.7: one side at a time. The rep count is per side (12 = 12 each arm, 24 in all), and the app says so.
+(function () {
+  const SIDE = {
+    arm: ['db_row', 'sa_cable_row', 'kb_gorilla_row', 'conc_curl', 'cable_kickback', 'kb_press'],
+    leg: ['sl_rdl', 'reverse_lunge', 'step_up', 'walking_lunge', 'split_squat', 'curtsy_lunge', 'sl_calf_raise', 'cable_leg_curl', 'cable_kickback_glute', 'cable_abduction', 'tke', 'sl_glute_bridge', 'donkey_kick', 'fire_hydrant', 'clamshell'],
+    side: ['pallof', 'woodchop', 'side_plank'],
+  };
+  Object.keys(SIDE).forEach((k) => SIDE[k].forEach((id) => { const e = window.EXERCISES.find((x) => x.id === id); if (e) e.side = k; }));
+})();

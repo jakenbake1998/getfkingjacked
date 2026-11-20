@@ -65,12 +65,13 @@
     document.body.appendChild(t);
     setTimeout(() => t.remove(), ms || 2600);
   }
+  const eachSide = (ex) => (ex && ex.side ? ' each ' + ex.side : ''); // one side at a time: reps are per side
   function setLine(ex, it) {
     const s = it.sets[0];
     const n = it.sets.length;
-    if (ex.unit === 'lb') return n + ' sets of ' + s.r + ' at ' + fmtW(s.w) + ' lb';
-    if (ex.unit === 'sec') return n + ' rounds of ' + s.r + ' sec';
-    return n + ' sets of ' + s.r + ' reps';
+    if (ex.unit === 'lb') return n + ' sets of ' + s.r + eachSide(ex) + ' at ' + fmtW(s.w) + ' lb';
+    if (ex.unit === 'sec') return n + ' rounds of ' + s.r + ' sec' + eachSide(ex);
+    return n + ' sets of ' + s.r + ' reps' + eachSide(ex);
   }
   function thumb(id, cls) {
     const inf = info(id);
@@ -230,9 +231,9 @@
   }
   function setRows(it, i, live) {
     const ex = E.exInfo(it.ex);
-    const unitLabel = ex.unit === 'sec' ? 'sec' : ex.repWord || 'reps';
+    const unitLabel = (ex.unit === 'sec' ? 'sec' : ex.repWord || 'reps') + eachSide(ex);
     return `<div class="sets">
-      <div class="set set-head ${live ? '' : 'nocheck'}"><span></span><span>${ex.unit === 'lb' ? (E.ownedDumbbells(ex) || ex.eq.includes('dumbbell') ? 'lb each' : 'lb') : ''}</span><span>${unitLabel}</span>${live ? '<span></span>' : ''}</div>
+      <div class="set set-head ${live ? '' : 'nocheck'}"><span></span><span>${ex.unit === 'lb' ? (ex.side !== 'arm' && (E.ownedDumbbells(ex) || ex.eq.includes('dumbbell')) ? 'lb each' : 'lb') : ''}</span><span>${unitLabel}</span>${live ? '<span></span>' : ''}</div>
       ${it.sets.map((s, j) => `<div class="set ${s.done ? 'done' : ''} ${s.warm ? 'warm' : ''} ${live ? '' : 'nocheck'}">
         <div class="set-n">${s.warm ? 'W' : j + 1 - it.sets.slice(0, j).filter((x) => x.warm).length}</div>
         ${ex.unit === 'lb' ? `<div class="field"><button data-act="w" data-i="${i}" data-j="${j}" data-d="-1" aria-label="Less weight">−</button><input inputmode="decimal" data-f="w" data-i="${i}" data-j="${j}" value="${fmtW(s.w)}" aria-label="Weight"><button data-act="w" data-i="${i}" data-j="${j}" data-d="1" aria-label="More weight">+</button></div>` : `<div class="field bw">Bodyweight</div>`}
@@ -250,11 +251,9 @@
       <div class="ex-head">
         <button class="ex-open" data-act="detail" data-i="${i}">${thumb(it.ex)}
           <span class="ex-main"><span class="ex-name">${esc(ex.name)}</span>
-          <span class="ex-meta">${done ? '<span class="donechip">Done</span> ' : ''}${nDone} of ${it.sets.length} sets, ${mmss(it.rest)} rest</span></span></button>
+          <span class="ex-meta">${done ? '<span class="donechip">Done</span> ' : ''}${nDone} / ${it.sets.length} sets</span></span></button>
         <button class="ex-more" data-act="exmenu" data-i="${i}" aria-label="Options for ${esc(ex.name)}">⋯</button>
       </div>
-      ${E.S.notes[it.ex] && (!done || it.open) ? `<div class="ex-note"><span>📝</span><span>${esc(E.S.notes[it.ex])}</span></div>` : ''}
-      ${!done || it.open ? setRows(it, i, true) : ''}
     </div>`;
   }
 
@@ -388,7 +387,7 @@
           const tw = Math.max(...s.sets.map((x) => x.w || 0)), pw = prev ? Math.max(...prev.sets.map((x) => x.w || 0)) : null;
           const badge = prev ? (tw > pw ? `+${fmtW(tw - pw)} lb` : tw === pw && tot > ptot ? `${tot - ptot} more reps` : '') : '';
           return `<div class="hist"><h3>${fmtDate(s.date, { weekday: 'short', month: 'short', day: 'numeric' })}</h3>${badge ? `<span class="badge">${badge}</span>` : ''}
-            ${s.sets.map((x, n) => `<div class="hset"><span class="hn">${n + 1}</span>${x.r}${ex.unit === 'sec' ? ' sec' : ' reps'}${ex.unit === 'lb' ? ' × ' + fmtW(x.w) + ' lb' : ''}</div>`).join('')}
+            ${s.sets.map((x, n) => `<div class="hset"><span class="hn">${n + 1}</span>${x.r}${ex.unit === 'sec' ? ' sec' : ' reps'}${eachSide(ex)}${ex.unit === 'lb' ? ' × ' + fmtW(x.w) + ' lb' : ''}</div>`).join('')}
             ${ex.unit === 'lb' ? `<div class="sub">Est. 1-rep max ${Math.round(E.bestE1rm(s.sets))} lb</div>` : ''}</div>`;
         }).join('') : `${ex.unit === 'lb' ? `<div class="card"><div class="sub">Est. 1-rep max</div><div class="big-num" style="font-size:52px">${Math.round(series[series.length - 1].v)}<small>lb</small></div>${series.length > 1 ? lineChart(series, { h: 150, unit: 'lb' }) : '<div class="empty">Log it again to start the chart.</div>'}</div>` : ''}
           <div class="card"><div class="sub">${ex.unit === 'lb' ? 'Top weight' : ex.unit === 'sec' ? 'Longest round' : 'Best set'}</div><div class="big-num" style="font-size:52px">${fmtW(wSeries[wSeries.length - 1].v)}<small>${ex.unit === 'lb' ? 'lb' : ex.unit === 'sec' ? 'sec' : 'reps'}</small></div>${wSeries.length > 1 ? lineChart(wSeries, { h: 150, unit: ex.unit === 'lb' ? 'lb' : ex.unit === 'sec' ? 'sec' : 'reps' }) : ''}</div>`}
@@ -396,13 +395,23 @@
     } else if (d.view === 'replace') {
       const opts = E.swapOptions(plan, d.i);
       const q = (d.q || '').toLowerCase();
-      const all = q ? EXERCISES.filter((e) => E.allowed(e) && !plan.items.some((x) => x.ex === e.id) && (e.name.toLowerCase().includes(q) || e.group.toLowerCase().includes(q))) : opts;
+      // v3.7: searching (or "Search all exercises") shows everything; anything risky is marked, never hidden
+      const wide = !!q || d.all;
+      const warnOf = (e) => {
+        const r = E.blockedBy(e); if (!r) return '';
+        if (r === 'equipment') { const miss = e.eq.filter((k) => !E.S.settings.equipment[k]).map((k) => ((EQUIPMENT.find((x) => x.id === k) || {}).name || k).toLowerCase()); return 'Needs ' + miss.join(', '); }
+        if (r === 'ban') return 'You dropped this one';
+        const j = r.split(':')[1]; return 'Hard on your ' + ((JOINTS.find((x) => x.id === j) || {}).name || j).toLowerCase();
+      };
+      const all = wide ? libExercises().filter((e) => e.id !== it.ex && !plan.items.some((x) => x.ex === e.id) && (!q || e.name.toLowerCase().includes(q) || e.group.toLowerCase().includes(q) || muscleLine(e.id).toLowerCase().includes(q)))
+        .sort((a, b) => (b.group === ex.group) - (a.group === ex.group) || !!E.blockedBy(a) - !!E.blockedBy(b) || a.name.localeCompare(b.name)) : opts;
+      const row = (o) => { const w = wide ? warnOf(o) : ''; return `<button class="rep-row" data-act="swapto" data-i="${d.i}" data-ex="${o.id}">${thumb(o.id)}<span><b>${esc(o.name)}</b><small>${esc(muscleLine(o.id))}</small>${w ? `<small class="rep-warn">⚠ ${esc(w)}</small>` : ''}</span></button>`; };
       body = `<div class="dv-bar"><button class="dv-x" data-act="dview" data-v="main" aria-label="Close">${XICON}</button><span>Replace ${esc(ex.name)}</span><span style="width:40px"></span></div>
-        <div class="dpad"><input class="text-in" id="rep-q" placeholder="Search" value="${esc(d.q || '')}" autocomplete="off">
+        <div class="dpad"><input class="text-in" id="rep-q" placeholder="Search all exercises" value="${esc(d.q || '')}" autocomplete="off">
         <div class="rep-cur">${thumb(it.ex)}<span><b>${esc(ex.name)}</b><small>${esc(muscleLine(it.ex))}</small></span></div>
-        <div class="lbl">${q ? 'Results' : 'Replace with'}</div>
-        ${all.length ? all.slice(0, 40).map((o) => `<button class="rep-row" data-act="swapto" data-i="${d.i}" data-ex="${o.id}">${thumb(o.id)}<span><b>${esc(o.name)}</b><small>${esc(muscleLine(o.id))}</small></span></button>`).join('') : '<div class="empty">Nothing that fits your equipment and joints.</div>'}
-        <div class="sub" style="margin-top:10px">Exercises that would hurt a sore joint aren’t shown.</div></div>`;
+        <div class="lbl">${q ? 'Results' : d.all ? 'All exercises' : 'Replace with'}</div>
+        ${all.length ? all.map(row).join('') : `<div class="empty">${wide ? 'No exercises match.' : 'Nothing that fits your equipment and joints.'}</div>`}
+        ${wide ? '<div class="sub" style="margin-top:10px">Anything hard on a sore joint or missing equipment is marked. You can still pick it.</div>' : '<button class="btn-quiet" data-act="repall" style="margin-top:12px">Search all exercises</button><div class="sub" style="margin-top:10px">These fit your equipment and joints. Search all to pick anything, with warnings.</div>'}</div>`;
     } else if (d.view === 'more') {
       body = `${head(esc(ex.name))}<div class="dpad">
         <div class="lbl">Notes</div><textarea id="ex-note" placeholder="Seat height, grip, how it felt">${esc(E.S.notes[it.ex] || '')}</textarea>
@@ -934,7 +943,7 @@
     const ae = document.activeElement;
     if (ae && ae !== el && ae.matches && ae.matches('input[data-f], #steps-in, #bw-in')) ae.blur(); // fires 'change' first
     const act = el.dataset.act;
-    if (!ui.detail && ['dview', 'dtab', 'libg', 'libopen', 'libback', 'restpick', 'restset', 'savenote', 'warmup'].includes(act)) return;
+    if (!ui.detail && ['dview', 'dtab', 'libg', 'libopen', 'libback', 'restpick', 'restset', 'repall', 'savenote', 'warmup'].includes(act)) return;
     if (act === 'close' && ev.target !== el) return;
     const i = el.dataset.i != null ? +el.dataset.i : null;
     const j = el.dataset.j != null ? +el.dataset.j : null;
@@ -983,6 +992,7 @@
       case 'dclose': closeDetail(); break;
       case 'dview': ui.detail.view = el.dataset.v; ui.detail.tab = 0; ui.detail.q = ''; renderDetail(); $('#detail .detail').scrollTop = 0; break;
       case 'dtab': ui.detail.tab = +el.dataset.k; renderDetail(); break;
+      case 'repall': ui.detail.all = true; renderDetail(); break;
       case 'restpick': restSheet(); break;
       case 'restset': { const plan = curPlan(); const it = plan.items[ui.detail.i]; it.rest = +el.dataset.k; E.S.rest[it.ex] = it.rest; E.save(); closeSheet(); renderDetail(); render(); break; }
       case 'savenote': { const it = curPlan().items[ui.detail.i]; const v = $('#ex-note').value.trim(); if (v) E.S.notes[it.ex] = v; else delete E.S.notes[it.ex]; E.save(); toast('Note saved'); ui.detail.view = 'main'; renderDetail(); break; }
@@ -1272,6 +1282,7 @@
     // closes only if you were still pulling down when you let go (or flicked down fast); any move back up keeps it open
     if ((dy > 110 && dir > 0) || (dy > 30 && v > 0.9)) {
       el.style.transform = 'translateY(100%)';
+      if (!isSheet) document.body.classList.remove('noscroll'); // timer lifts back up while the page slides away
       setTimeout(() => { el.style.transition = ''; el.style.transform = ''; if (isSheet) overlay.innerHTML = ''; else { ui.detail = null; detailEl.textContent = ''; document.body.classList.remove('noscroll'); render(); } }, 200);
     } else { el.style.transform = ''; setTimeout(() => (el.style.transition = ''), 230); }
   });

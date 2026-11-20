@@ -28,13 +28,13 @@
     b: { t: -4, ua: [-12, -12], fa: [150, 150], th: [0, 0], sh: [-92, -90] } });
   add('db_row', standing({ hold: 'db1', bench: { at: 'hand1', w: 70, side: 'right' }, cam: [0.3, 0.25, 0.92],
     a: { t: 76, hd: -12, ua: [0, 2], fa: [0, 0], th: [22, 6], sh: [-6, -4] },
-    b: { t: 76, hd: -12, ua: [-44, 2], fa: [6, 0], th: [22, 6], sh: [-6, -4] } }));
+    b: { t: 76, hd: -12, ua: [-84, 2], fa: [8, 0], th: [22, 6], sh: [-6, -4] } })); // v3.7: full pull
   add('cs_db_row', standing({ hold: 'db', handsZ: 21, chestPad: true, cam: [0.3, 0.2, 0.93],
     a: { t: 50, hd: -8, ua: [0, 0], fa: [0, 0], th: [24, 24], sh: [-14, -14] },
-    b: { t: 50, hd: -8, ua: [-48, -48], fa: [8, 8], th: [24, 24], sh: [-14, -14] } }));
+    b: { t: 50, hd: -8, ua: [-80, -80], fa: [8, 8], th: [24, 24], sh: [-14, -14] } })); // v3.7: full pull
   add('bb_row', standing({ hold: 'bar', handsZ: 22, cam: [0.4, 0.15, 0.9],
     a: { t: 66, hd: -12, ua: [2, 2], fa: [0, 0], th: [20, 18], sh: [-10, -8] },
-    b: { t: 66, hd: -12, ua: [-50, -50], fa: [-6, -6], th: [20, 18], sh: [-10, -8] } }));
+    b: { t: 66, hd: -12, ua: [-86, -86], fa: [4, 4], th: [20, 18], sh: [-10, -8] } })); // v3.7: full pull, elbows past the back
   copy('db_bo_row', 'bb_row', { hold: 'db', handsZ: 22 });
   add('seated_cable_row', { root: 'hip', at: [92, 144], box: { x0: 70, x1: 112, top: 156 }, cable: [196, 160], cableTo: 'mid', hold: 'handle', handsZ: 5,
     a: { t: 22, hd: -6, ua: [82, 82], fa: [86, 86], th: [80, 80], sh: [60, 60] },
@@ -43,8 +43,8 @@
     a: { t: 14, tw: 18, ua: [84, 4], fa: [88, 2], th: [10, -14], sh: [-6, 6] },
     b: { t: 10, tw: -16, ua: [-36, 4], fa: [78, 2], th: [10, -14], sh: [-6, 6] } }));
   add('kb_gorilla_row', standing({ hold: 'kb', cam: [0.45, 0.25, 0.86],
-    a: { t: 78, hd: -14, ua: [-46, 0], fa: [2, 0], th: [20, 20], sh: [-8, -8], labd: [14, 14] },
-    b: { t: 78, hd: -14, ua: [0, -46], fa: [0, 2], th: [20, 20], sh: [-8, -8], labd: [14, 14] } }));
+    a: { t: 80, hd: -14, ua: [-84, 6], fa: [8, 4], th: [32, 32], sh: [-16, -16], labd: [10, 14] },
+    b: { t: 80, hd: -14, ua: [6, -84], fa: [4, 8], th: [32, 32], sh: [-16, -16], labd: [14, 10] } })); // v3.7: full pull (elbow past the back, bell at the hip) and a full hang
   add('straight_arm_pd', standing({ cable: [176, 14], cableTo: 'mid', hold: 'cbar', handsZ: 20,
     a: { t: 24, hd: -6, ua: [146, 146], fa: [148, 148], th: [10, 8], sh: [-6, -4] },
     b: { t: 24, hd: -6, ua: [4, 4], fa: [6, 6], th: [10, 8], sh: [-6, -4] } }));

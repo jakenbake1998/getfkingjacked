@@ -104,6 +104,8 @@ h2{font:700 26px/1 var(--display);margin:28px 0 12px}
 
 /* rest timer dock: a weight stack that drains */
 .timer{position:fixed;left:10px;right:10px;bottom:calc(72px + var(--safe-b));z-index:38;max-width:540px;margin:0 auto;background:#0f1215;border:1px solid var(--line);border-radius:20px;padding:14px;display:grid;grid-template-columns:62px 1fr;gap:14px;box-shadow:0 16px 40px rgba(0,0,0,0.5)}
+.timer{transition:bottom .34s cubic-bezier(.2,.8,.2,1),left .34s cubic-bezier(.2,.8,.2,1),right .34s cubic-bezier(.2,.8,.2,1),border-radius .34s,padding-bottom .34s cubic-bezier(.2,.8,.2,1)}
+body.noscroll .timer{left:0;right:0;bottom:0;border-radius:22px 22px 0 0;border-bottom-color:transparent;padding-bottom:calc(14px + var(--safe-b))} /* v3.7: inside an exercise the timer docks to the bottom edge */
 .timer.over{border-color:var(--pin)}
 .stack{display:flex;flex-direction:column;gap:3px;justify-content:flex-end;height:100%;min-height:96px;position:relative;padding:0 6px}
 .plate{height:6px;border-radius:2px;background:#2a3037;transition:background .3s}
@@ -383,6 +385,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none}
 .lib-chips .chip{flex:none}
 .lib-row small.dim{color:var(--dim)}
 .lib-row{position:relative}
+.rep-warn{color:var(--hurt)!important;font-weight:600}
 .lib-warn{flex:none;margin-left:auto;align-self:flex-start;font-style:normal;font-size:11px;font-weight:700;color:var(--hurt);background:rgba(255,90,80,.12);padding:3px 7px;border-radius:8px}
 .card{position:relative}
 .info-btn{position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:50%;border:1.5px solid var(--muted);color:var(--muted);font:700 15px/1 Georgia,serif;font-style:italic;display:grid;place-items:center;padding:0;background:none}
@@ -557,12 +560,12 @@ p,.sub,.tip,.coach-b,.steps-list li,.inj-tip,.about-note,.empty,.avoid,.ex-meta,
 <nav class="tabs" id="tabs"></nav>
 <div id="detail"></div>
 <div id="overlay"></div>
-<script src="js/data.js?v=3.7"></script>
-<script src="js/exinfo.js?v=3.7"></script>
-<script src="js/figure.js?v=3.7"></script>
-<script src="js/poses.js?v=3.7"></script>
-<script src="js/figure3d.js?v=3.7"></script>
-<script src="js/engine.js?v=3.7"></script>
-<script src="js/app.js?v=3.7"></script>
+<script src="js/data.js?v=3.8"></script>
+<script src="js/exinfo.js?v=3.8"></script>
+<script src="js/figure.js?v=3.8"></script>
+<script src="js/poses.js?v=3.8"></script>
+<script src="js/figure3d.js?v=3.8"></script>
+<script src="js/engine.js?v=3.8"></script>
+<script src="js/app.js?v=3.8"></script>
 </body>
 </html>
